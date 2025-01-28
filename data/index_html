@@ -1,0 +1,60 @@
+<!DOCTYPE html><html lang="fr">
+<head>
+ <meta name="viewport" content="width=device-width, initial-scale=1" charset="UTF-8" />
+ <title>%TITRE_LONG%</title>
+ <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+ <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Allerta+Stencil">
+ <script src="https://code.jquery.com/jquery-3.6.4.js" integrity="sha256-a9jBBRygX1Bh5lt8GZjXDzyOB+bWve9EiO7tROUtj/E=" crossorigin="anonymous"></script>
+ <script>
+  $(document).ready( function() { $('#div_refresh').load(document.URL +' #div_refresh');
+        setInterval( function() { $('#div_refresh').load(document.URL +' #div_refresh'); }, 5000); });
+ </script>
+</head>
+<body>
+  <script>
+    function toggleBottom() { var bottomDiv = document.getElementById("bottom");
+      if (bottomDiv.style.display === "none") { bottomDiv.style.display = "block"; } 
+      else { bottomDiv.style.display = "none"; } }
+  </script>
+  
+  <div class= "w3-container w3-black w3-center w3-allerta">
+  <h1>"%TITRE_LONG%"</h1></div>
+  
+  <div id="div_refresh">
+    <div class="w3-card-4 w3-teal w3-padding-16 w3-xxxlarge w3-center">
+      <p>Production Solaire</p>
+      %PUIS_PANNEAU%&nbsp;W
+    </div>
+    <div class="w3-card-4 w3-blue-grey w3-padding-16 w3-xxxlarge w3-center">
+      <p>Routage vers le ballon</p>
+      %DIMMER_BALLON%&#37;&nbsp;&nbsp;(%PUIS_BALLON%&nbsp;W)
+    </div>
+    <div class="w3-card-4 w3-padding-16 w3-xxxlarge w3-center">
+      <p>Consommation EDF</p>
+      %PUIS_CONSO%&nbsp;W
+    </div>
+  </div>
+  
+  <center>
+    <button class="w3-bar w3-black w3-button w3-large w3-hover-white" onclick="toggleBottom()">Informations journalières</button>
+  </center>
+  
+  <div id="bottom" style="display:none;">
+    <div class="w3-card-4 w3-teal w3-padding-16 w3-xxxlarge w3-center">
+      <p>Consommation EDF journalière</p>
+      %CUMUL_CONSO%&nbsp;kWh
+    </div>
+    <div class="w3-card-4  w3-blue-grey w3-padding-16 w3-xxxlarge w3-center">
+      <p>Production Solaire journalière</p>
+      %CUMUL_PV%&nbsp;kWh
+    </div>
+    <div class="w3-card-4 w3-dark-grey w3-padding-16 w3-xxxlarge w3-center">
+      <p>Recharge Cumulus journalière</p>
+      %CUMUL_BALLON%&nbsp;kWh
+    </div>
+    <div class="w3-card-4 w3-padding-16 w3-xxxlarge w3-center">
+      <p>Injection sur EDF</p>
+      %CUMUL_INJ%&nbsp;kWh
+    </div>
+  </div>
+</body></html>
