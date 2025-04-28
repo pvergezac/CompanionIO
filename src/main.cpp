@@ -1,8 +1,9 @@
 #include <Arduino.h>
 
-const String TITRE = "MSunPV Companion_NG";
-const String TITRE_LONG = "Companion_NG (Nouvelle Génération)";
+const String TITRE = "MSunPV CompanionIO";
+const String TITRE_LONG = "CompanionIO (Nouvelle Génération)";
 const String Version = "1.01";
+
 //*************************************************
 //                @pzac                          **
 //                @jjhontebeyrie                 **
@@ -65,15 +66,16 @@ WiFiMulti wifiMulti;
 #include <HTTPClient.h>
 
 #include <ESPmDNS.h>                // Pour le mDNS
-#include "NTP_Time.h"               // Attached to this sketch, see that tab for library needs
+#include "NTP_Time.h"               // Time Synchronisation
+#include <RemoteDebug.h>            // Debug via Wifi
 #include <esp_task_wdt.h>           // watchdog en cas de déconnexion ou blocage
-#include <TFT_eSPI.h>
+#include <TFT_eSPI.h>               // Gestion Ecran
 #include <OneButton.h>              // OneButton par Matthias Hertel (dans le gestionnaire de bibliothèque)
-#include <ArduinoJson.h>
+#include <ArduinoJson.h>            // JSon
 #include <OpenWeather.h>            // https://github.com/Bodmer/OpenWeather
 #include <InfluxDbClient.h>         // InfluxDB
-#include <InfluxDbCloud.h>          // 
-#include <PubSubClient.h>           // Librairie pour la gestion Mqtt
+#include <InfluxDbCloud.h>          // InfluxDB  pour le certificat
+#include <PubSubClient.h>           // gestion MQTT
 
 // Additional functions
 #include "GfxUi.h"                  // Attached to this sketch
@@ -81,7 +83,6 @@ WiFiMulti wifiMulti;
 #include "time.h"
 
 //+++++++++++++++++++++++++++++++
-#include "perso.h"                  // Données personnelles à modifier dans le fichier (voir en haut de cet écran)
 #include "logo.h"                   // Logo de départ
 #include "images.h"                 // Images affichées sur l'écran
 #include "meteo.h"                  // Icones météo
@@ -91,8 +92,8 @@ WiFiMulti wifiMulti;
 #define LCD_CENTER_X (LCD_WIDTH /2)
 #define LCD_CENTER_Y (LCD_HEIGHT /2)
 
-#define AA_FONT_SMALL "fonts/NSBold15" // 15 point Noto sans serif bold
-#define AA_FONT_LARGE "fonts/NSBold36" // 36 point Noto sans serif bold
+#define AA_FONT_SMALL "fonts/NSBold15"            // 15 point Noto sans serif bold
+#define AA_FONT_LARGE "fonts/NSBold36"            // 36 point Noto sans serif bold
 #define AA_FONT_SMALL2 "fonts/NotoSansBold15"
 #define AA_FONT_LARGE2 "fonts/NotoSansBold36"
 
@@ -110,7 +111,7 @@ WiFiMulti wifiMulti;
 #define color8  0x16DA          //
 
 // Couleurs de fond Tempo
-#define FOND_BLEU TFT_NAVY  // auparavant 0x0017
+#define FOND_BLEU TFT_NAVY      // auparavant 0x0017
 #define FOND_BLANC 0xE71C
 #define FOND_ROUGE 0xB800
 
@@ -133,61 +134,35 @@ const String Months[13] = { "Mois", "Jan", "Fev", "Mars", "Avril", "Mai", "Juin"
 
 //+++++++++++++++++++++++++++++++++++
 // Variables pour dimmer PWM de luminosité d'affichage
-int backlight[6] = {0, 10, 30, 60, 120, 255};
-int backligthLevel = 3;         // Luminosité ecran
+int backlight[6] = {0, 10, 30, 60, 120, 255}; // Tableau des ratios PWM des niveaux de luminosité écran
+int backligthLevel = 3;                       // Luminosité ecran
 
-#define TEMPS_VEILLE (5* 60 * 1000)     // Veille apres 60s
-bool veille_on = false;                 // veille encour
-ulong veille_deb;                       // temps de debut de mise en veille
+#define TEMPS_VEILLE (5* 60 * 1000)           // Veille après 60s
+bool veille_on = false;                       // Veille encour
+ulong veille_deb;                             // Temps de debut de mise en veille
 
 //+++++++++++++++++++++++++++++++++++
 // Update toutes les 15 minutes, jusqu'à 1000 requêtes par jour gratuit (soit ~40 par heure)
-#define UPDATE_TIME_INTERVAL   (1*1000)        // 1 secondes
-#define UPDATE_MSUNPV_INTERVAL (15*1000)       // 15 secondes
-#define UPDATE_METEO_INTERVAL  (15*60*1000)    // 15 minutes    (1000 requêtes/jour gratuit)
+#define UPDATE_TIME_INTERVAL   (1*1000)       // 1 secondes
+#define UPDATE_MSUNPV_INTERVAL (15*1000)      // 15 secondes
+#define UPDATE_METEO_INTERVAL  (15*60*1000)   // 15 minutes    (1000 requêtes/jour gratuit)
+#define UPDATE_METEO_SOLAIRE_INTERVAL  (15*60*1000)   // 15 minutes    (1000 requêtes/jour gratuit)
 
+ulong uptime = 0;                             // Heure de demarrage (reset)
 
-//+++++++++++++++++++++++++++++++++++
-#define INFLUXDB_URL "https://influxdb.pvergezac.ovh"
-#define INFLUXDB_TOKEN "X-1zp9i_mL9Wi4wzIYWJMWcKKlKX8toAWzHC4GYTZs59xaARE3T2CfcZNaNxVdEG0-fGZKCYiDMHk0xmaXdzDg=="
-#define INFLUXDB_ORG "042b7e8882771b98"
-#define INFLUXDB_BUCKET "test1"
-
-// Declare InfluxDB client instance with preconfigured InfluxCloud certificate
-InfluxDBClient client(INFLUXDB_URL, INFLUXDB_ORG, INFLUXDB_BUCKET, INFLUXDB_TOKEN, InfluxDbCloud2CACert);
-
-// Declare Data point
-Point sensor("measurements");
-  
-//+++++++++++++++++++++++++++++++++++
-// MQTT
-bool withMqtt = false;
-WiFiClient clientMQTT;
-PubSubClient mqttClient(clientMQTT);
-int mqttCounterConn = 0;      // connections counter
-
-// Broker MQTT (Home Assistant) adrs et login / password
-String mqtt_server     = "192.168.0.200";
-String mqtt_user       = "admin";
-String mqtt_pwd        = "Qq123456+1";
-
-const char* topicHAStatus = "homeassistant/status";
-const String base_topic = "homeassistant/sensor/";
-const String uidPrefix = "msunpv-comp";       // Prefix for unique ID generation (limit to 20 chars)
-String devUniqueID;                           // Generated Unique ID for this device (uidPrefix + last 6 MAC characters) 
-
+#define TIMEZONE euCET              // Voir NTP_Time.h tab pour d'autres "Zone references", UK, usMT etc
 
 //+++++++++++++++++++++++++++++++++++
 // Gestion des pages écran
 #define PAGE_DEFAULT  0
-#define PAGE_METEO    1
-#define PAGE_METEO2   2
-#define PAGE_SOLAR    3
-#define PAGE_TEMPO    4
-#define PAGE_CUMULS   5
-#define PAGE_LUMI     6
-#define PAGE_LAST     PAGE_LUMI
-#define DUREE_AFF     (5* 60 * 1000)            // Durée affichage page, avant retour à la page par défaut
+#define PAGE_SOLAR    1
+#define PAGE_TEMPO    2
+#define PAGE_CUMULS   3
+#define PAGE_LUMI     4
+#define PAGE_METEO    5
+#define PAGE_METEO2   6
+#define PAGE_LAST     6
+#define DUREE_AFF     (5* 60 * 1000)          // Durée affichage page, avant retour à la page par défaut
 
 int page = PAGE_DEFAULT;                      // Page courante affichée
 ulong tempsAffPage = 0;                       // Temps d'affichage page, avant retour à la page par défaut
@@ -197,10 +172,11 @@ bool firstAff = true;
 
 //+++++++++++++++++++++++++++++++++++
 ESPAsync_WiFiManager *wm;
-AsyncWebServer webserver(80);                    //  Serveur web on port 80
-//DNSServer dns;
+AsyncWebServer webserver(80);                 //  Serveur web on port 80
+RemoteDebug Debug;                            // Debug via WIFI instead of Serial, Connect a Telnet terminal on port 23
 
 //+++++++++++++++++++++++++++++++++++
+const char* lumiConfigFileName = "/lumi.json";
 const char* configFileName = "/config.json";
 bool shouldSaveConfig = false;
 
@@ -209,11 +185,10 @@ OneButton boutonBacklight(topbutton, true);   // Bouton éclairage
 OneButton boutonPage(lowerbutton, true);      // Bouton de selection de page
 TFT_eSPI tft = TFT_eSPI();
 TFT_eSprite sprite = TFT_eSprite(&tft);       // Tout l'écran
-
-// Orientation affichage - (3 pour prise à gauche, 1 pour prise à droite)
-const int rotation = 3;
+const int rotation = 3;                       // Orientation affichage - (3 pour prise à gauche, 1 pour prise à droite)
 
 //+++++++++++++++++++++++++++++++++++
+// MSunPV
 String msunpv_server;                         // Adresse du routeur MSunPV
 
 // Seuil minimum d'affichage des mesures PV et conso (en W)
@@ -222,18 +197,18 @@ const int residuel = 10;
 int pCaractPV = 3000;           // puissance Crete installé des panneaux solaire en watt
 int pCaractBallon = 2500;       // puissance du ballon cumulus en watt
 
-bool withBatt = true;           // Alimentation par batterie
-bool withRad = true;            // Radiateurs électriques
-bool withTBal = true;           // Sonde Température installé sur le cumulus
+bool withBatt = false;          // Alimentation par batterie
+bool withRad = false;           // Radiateurs électriques
+bool withTBal = false;          // Sonde Température installé sur le cumulus
 bool withVeille = true;         // Mise en veille affichage
 
 // Variables affichant les valeurs reçues depuis le MSunPV
 int powpv = 0;            // Puissance panneaux (W)
 int powreso = 0;          // Puissance consomé/injectée (W)
 int outbal = 0;           // Dimmer ballon (0 - 100%)
-int outrad =0;            // Dimmer radiateur
-int powbal =0;            // Puissance injection ballon, recalculée a partir de dimmer_ballon
-int voltres =0;           // Tension réseau (V)
+int outrad = 0;           // Dimmer radiateur
+int powbal = 0;           // Puissance injection ballon, recalculée a partir de dimmer_ballon
+int voltres = 0;          // Tension réseau (V)
 
 float tbal = 0.;          // Température ballon (°C)
 float tsdb = 0.;          // Température Salle de bain (°C)
@@ -244,59 +219,103 @@ float cumulInj = 0.;      // Cumul Injection
 float cumulPV_J = 0.;     // Cumul Panneaux
 float cumulPV_P = 0.;     // Cumul Ballon cumulus
 
+String msunpv_time;
+String msunpv_date;
+bool msunpv_enrgsd;
+int msunpv_surv[16];
+int msunpv_cmd[8];
+int msunpv_out[16];
+int msunpv_chout[8];
+
+bool cmdManuBal, cmdAutoBal, cmdManuRad, cmdAutoRad;
+bool cmdInject, cmdZero, cmdMoyen, cmdFort;
+
+
 float vBatt;              // Voltage batterie
 
 //+++++++++++++++++++++++++++++++++++
-// Données de openweather
-#define TIMEZONE euCET    // Voir NTP_Time.h tab pour d'autres "Zone references", UK, usMT etc
-OW_Weather ow;            // Weather forecast librairie instance
-
-// Localisation de votre ville pour la météo et horaires de levé et couché de soleil
-String ow_latitude  = "";           // 90.0000 to -90.0000 negative for Southern hemisphere
-String ow_longitude = "";           // 180.000 to -180.000 negative for West
-String ow_api_key = "";
-String ow_units = "metric";  // ou "imperial"
-String ow_language = "fr";
+// Données de Openweather
+OW_Weather ow;                      // Weather forecast librairie instance
+String ow_latitude;                 // 90.0000 to -90.0000 negative for Southern hemisphere
+String ow_longitude;                // 180.000 to -180.000 negative for West
+String ow_api_key;
 
 String lever = "", coucher = "", icone = "", ID = "";
 float tempExt = 0.;
 
-struct MeteoData {
-  String   dt = "";
-  String   lever="";
-  String   coucher="";
+struct Prevision {
+  String  dt;           // Heure de la prévi
 
-  float    temp = 0;
-  float    feels_like = 0;
-  float    pressure = 0;
-  uint8_t  humidity = 0;
-  //float    dew_point = 0;
+  float   temp;         // Température
+  float   feels_like;   // Température resentie
+  float   temp_min;     // Température min.
+  float   temp_max;     // Température max.
+  float   pressure;     // Pression (hPa)
+  uint    humidity;     // Humidité (%)
 
-  uint8_t  clouds = 0;
-  //float    uvi = 0;
-  uint32_t visibility = 0;
+  uint    clouds;       // Nébulosité (%)
+  //float uvi;
+  float   visibility;   // Visibilité moyenne (km)
+  float   rain;         // Pluie (mm ou l/m2)
+  uint    prob;         // Probability of precipitation (%)
+  float   snow;         // Neige (mm)
 
-  float    wind_speed = 0;
-  float    wind_gust = 0;
-  uint16_t wind_deg = 0;
+  float   wind_speed;   // Vent (m/s)
+  float   wind_gust;    // Rafale (m/s)
+  uint    wind_deg;     // Direction vent (°)
 
-  float    rain = 0;
-
-  // current.weather
-  String   main="";
-  String   description="";
-  String   icone="";
-  String   name="";
-  String   ID="";
+  String  main;         // Main weather condition
+  String  description;  // Weather condition description
+  String  icon;         // Weather icon id
+  String  ID;           // Weather condition id
 };
 
-MeteoData *myMeteo = new MeteoData;
+struct MeteoData {
+  // Meteo courante
+  String  dt;           // Heure de la météo (UTC)
+
+  float   temp;         // Température
+  float   feels_like;   // Température resentie
+  float   temp_min;     // Température min.
+  float   temp_max;     // Température max.
+  float   pressure;     // Pression (hPa)
+  uint    humidity;     // Humidité (%)
+  //float   dew_point;    // Température du point de rosé
+
+  uint    clouds;       // Nébulosité (%)
+  //float   uvi;
+  float   visibility;   // Visibilité moyenne (km)
+
+  float   rain;         // Pluie sur 1h (mm ou l/m2)
+  float   snow;         // Neige sur 1h (mm)
+
+  float   wind_speed;   // Vent (m/s)
+  float   wind_gust;    // Rafale (m/s)
+  uint    wind_deg;     // Direction vent (°)
+
+  String  wmain;         // Main weather condition
+  String  description;  // Weather condition description
+  String  icon;         // Weather icon id
+  String  ID;           // Weather condition id
+  String  cityName;     // City name
+  String  base;         // Station météo
+
+  String  lever;        // Heure de levé du soleil (UTC)
+  String  coucher;      // Heure de couché du soleil (UTC)
+
+  // Prévisions
+  Prevision previ[8];   // 8 prévi à 3h sur 24h
+};
+
+//MeteoData *myMeteo = new MeteoData;
+MeteoData myMeteo;
+
 
 //+++++++++++++++++++++++++++++++++++
 // Données Météo Solaire
-int forecast_watts[24];
-int forecast_wattshours[24];
-time_t forecast_times[24];
+int forecast_watts[48];
+int forecast_wattshours[48];
+time_t forecast_times[48];
 int forecast_size = 0;
 int forecast_whday[2] = {0,0};
 int ratelimit_remaining = 0;
@@ -308,20 +327,62 @@ const String tempo_str[] = {"??", "Bleu", "Blanc", "Rouge"};
 int codeTempoJ = 0; 
 int codeTempoJ1 = 0;
 
+bool updateTempo = false;
+
+float tarif_bleu_hp= 0.;
+float tarif_bleu_hc= 0.;
+float tarif_blanc_hp= 0.;
+float tarif_blanc_hc= 0.;
+float tarif_rouge_hp= 0.;
+float tarif_rouge_hc= 0.;
+
+//+++++++++++++++++++++++++++++++++++
+// InfluxDB
+bool withInfluxDB = false;
+String influxDbServerUrl;
+String influxDbToken;
+String influxDbOrg;
+String influxDbBucket;
+InfluxDBClient clientInfluxDB;
+
+// Declare Data point
+Point sensor("measurements");
+  
+//+++++++++++++++++++++++++++++++++++
+// MQTT - Home Assistant
+bool withMqtt = false;
+// Broker MQTT (Home Assistant) adrs et login / password
+String mqtt_server;
+String mqtt_user;
+String mqtt_pwd;
+
+WiFiClient mqttWifiClient;
+PubSubClient mqttClient(mqttWifiClient);
+int mqttCounterConn = 0;                      // connections counter
+
+const char* topicHAStatus = "homeassistant/status";
+const String base_topic = "homeassistant/sensor/";
+const String uidPrefix = "msunpv-comp";       // Prefix for unique ID generation (limit to 20 chars)
+String devUniqueID;                           // Generated Unique ID for this device (uidPrefix + last 6 MAC characters) 
+
+//Auto-discover enable/disable option
+bool auto_discovery = false;                  //default to false and provide end-user interface to allow toggling 
+
 //===============================================================
 // Prototypes des fonctions
 void log_print(String msg);
 void log_println(String msg);
-void init_wifi();
+void initWifi();
 void handleClick();
 void doubleClick();
 void handlePage();
 void handlePageDef();
-void requestMeteo();
-void requestMeteo2();
-void requestMeteo3();
-bool requestMSunPV(ulong ms);
-void requestTempo(ulong ms);
+void reqMeteo();
+void reqMeteo2();
+void reqtMeteoPrevi();
+bool reqMSunPV(ulong ms);
+void reqTempo();
+void reqTempoTarifs();
 void reqMeteoSolaire(ulong ms);
 void doAffichage();
 void AffichageDefault();
@@ -331,7 +392,8 @@ void AfficheMeteo();
 void AfficheMeteo2();
 void AfficheSolar();
 void AfficheLumi();
-String strTime(time_t unixTime);
+String formatHeure(time_t unixTime);
+String formatDateTime(time_t time);
 void barregraphV (int xx, int yy, int barres, int barresMax, int largeur, int pas_v, int pas_esp, uint32_t couleur);
 void split(String values[], int dimArray, String content, char separator);
 void signalwifi();
@@ -349,6 +411,7 @@ void loadLumiParam();
 void saveLumiParam();
 void sendInfluxDB();
 void mqttSendMesures();
+void mqttSendTempo();
 void mqttReconnect();
 void mqttReceiverCallback(char* topic, byte* payload, unsigned int length);
 void mqttHaDiscovery();
@@ -362,7 +425,8 @@ void setup() {
 
   esp_sleep_wakeup_cause_t source_reveil;
   source_reveil = esp_sleep_get_wakeup_cause();  //0= boot, 2=interruption capteur IR, 4 = interruption timer. Valeurs différentes de la doc Espressif ?
- 
+  uptime = millis();                    // Heure de démarrage
+
   pinMode(lowerbutton, INPUT_PULLUP);   // Right button pulled up, push = 0
   pinMode(topbutton, INPUT_PULLUP);     // Left button  pulled up, push = 0
   pinMode(PIN_LCD_BL, OUTPUT);          // BackLight enable pin
@@ -376,18 +440,34 @@ void setup() {
   Serial.end();
   delay(100);
   Serial.begin(115200);
-  ulong ms = millis() + 2000;           // timeout 2s, pour eviter le blocage si port serie non connecté
-  while (!Serial && (millis() < ms)) {
-    delay(10);                          // wait for serial port to connect. Needed for native USB port only
+  // Test si le cable USB est connecté, et un terminal actif, pour eviter les blocages
+  ulong ms = millis() + 3000;           // timeout 3s, pour eviter le blocage si port serie non connecté
+  while (true) {
+    // If Serial OK. Use it.
+    if (Serial) {                       
+      Serial.setDebugOutput(true);      // Debug Wifi
+      break;
+    }                            
+
+    // If Serial cable not connected. Stop Serial for not Tx enging. 
+    if (millis() > ms) {
+      Serial.end();                     
+      break;
+    }  
+
+    delay(10);
   }
 
-  //++++++++++++++++++++++++++++++++++++++++++++++++
-  log_println("[Init] - " +TITRE +" - V" + Version);
-  log_println("[Init] - Wake up : " + String(source_reveil));
+  delay(100);
 
   //++++++++++++++++++++++++++++++++++++++++++++++++
-  if(!LittleFS.begin(true)){
-    log_println("An Error has occurred while mounting LittleFS");
+  Serial.printf("****************************************************************\n");
+  Serial.printf("[Init] - %s - V%s\n", TITRE.c_str(), Version.c_str());
+  Serial.printf("[Init] - Wake up - source_reveil= %d\n", source_reveil);
+
+  //++++++++++++++++++++++++++++++++++++++++++++++++
+  if (!LittleFS.begin(true)) {
+    Serial.println("Error while mounting LittleFS\n");
     while (true) {
       delay(10);
     }
@@ -399,8 +479,7 @@ void setup() {
   }
 
   listDir("/", 0);
-  log_println("[LittleFS] - totalBytes: " +String(LittleFS.totalBytes()) +", usedBytes: " +String(LittleFS.usedBytes()));
-  //log_println("read wm_config.dat - [" +readFile("/wm_config.dat") +"]");
+  Serial.printf("[LittleFS] - totalBytes: %d, , usedBytes: %d\n", LittleFS.totalBytes(), LittleFS.usedBytes());
 
   //++++++++++++++++++++++++++++++++++++++++++++++++
   // Initialisation ecran
@@ -426,31 +505,65 @@ void setup() {
 
   //++++++++++++++++++++++++++++++++++++++++++++++++
   // Initialisation du WIFI
-  init_wifi();
+  initWifi();
 
-  //if you get here you have connected to the WiFi
-  log_println("[Wifi] - Connected...yeey : local ip : " +WiFi.localIP().toString());
-
+  //++++++++++++++++++++++++++++++++++++++++++++++++
   // Affichage de la connexion sur écran de départ
   tft.setTextColor(TFT_BLUE, TFT_WHITE);
   tft.setTextDatum(4);
   tft.drawCentreString(WiFi.localIP().toString() +"  " + String(WiFi.RSSI()) +"dB", LCD_CENTER_X, 136, 4);
-  delay(1000);
+
+  //++++++++++++++++++++++++++++++++++++++++++++++++
+  // Activation du mDNS responder: encore idée de Bellule
+  // Utiliser l'url : http://companion pour y accéder
+  if (!MDNS.begin("companion")) {
+    while (1) { 
+      Serial.printf("[Init] - Error setting up MDNS responder!\n");
+      delay(1000); 
+    }                                // endless loop
+  }
+
+  // Ajout du service to MDNS-SD
+  MDNS.addService("http", "tcp", 80);                       // Serveur Web
+  MDNS.addService("telnet", "tcp", 23);                     // Remote Debug telnet
+  
+  Serial.printf("[Init] - mDNS responder started\n");
+
+  //++++++++++++++++++++++++++++++++++++++++++++++++
+  // Attente pour permettre de lancer la console ou Telnet pour le debug
+  delay(3000);
+
+  //++++++++++++++++++++++++++++++++++++++++++++++++
+  // Init Remote Debug
+  Serial.printf("****************************************************************\n");
+  Serial.printf("[Init] - Starting Remote Debug\n");
+
+  Debug.begin("companion", Debug.DEBUG);
+  //Debug.setPassword("r3m0t0.");       // Password on telnet connection ?
+	Debug.setResetCmdEnabled(true);       // Enable the reset command
+	//Debug.showProfiler(true);           // Profiler (Good to measure times, to optimize codes)
+	Debug.showColors(true);               // Colors
+  if (Serial) Debug.setSerialEnabled(true);         // if you wants serial echo - only recommended if ESP is plugged in USB
+
+  //if you get here you have connected to the WiFi
+  debugI("================================================================");
+  debugI("[Init] - Remote debug started");
+  debugI("[Wifi] - Connected...yeey : local ip : %s", WiFi.localIP().toString().c_str());
 
   //++++++++++++++++++++++++++++++++++++++++++++++++
   // Initialisation du Watchdog
-  log_println("[Init] - Configuraton du WDT...");
+  debugI("[Init] - Configuraton du WDT...");
 
   esp_task_wdt_deinit();                                // MODIFICATION POUR VERSION ESP32 3.0.5 le watchdog est activé par défaut ; il faut d'abord le désactiver avant de le configurer
   int err_code = esp_task_wdt_init(WDT_TIMEOUT, true);  //enable panic so ESP32 restarts
   if (err_code != 0) 
-    log_println("[Init] - esp_task_wdt_init error: " + err_code);
+    debugE("[Init] - esp_task_wdt_init error: %d", err_code);
 
   esp_task_wdt_add(NULL);  //add current thread to WDT watch
 
   //++++++++++++++++++++++++++++++++++++++++++++++++
   // Synchronisation de l'heure (NTP)
-  log_println("[Init] - Synchronisation de l'heure (NTP)");
+  debugI("[Init] - Synchronisation de l'heure (NTP)");
   udp.begin(localPort);
   syncTime();  // Synchronisation de l'heure systeme via NTP
   esp_task_wdt_reset();
@@ -474,29 +587,19 @@ void setup() {
   initWebServer();
 
   //++++++++++++++++++++++++++++++++++++++++++++++++
-  // Check InfluxDb connection
-  if (client.validateConnection()) {
-    String msg = "Connected to InfluxDB: " + client.getServerUrl();
-    log_println(msg);
-  } else {
-    String msg = "InfluxDB connection failed: " + client.getLastErrorMessage();
-    log_println(msg);
-  }
+  if (withInfluxDB) {
+    debugI("[Init] - Connecting to InflufDB server= %s, org= %s, bucket= %s", influxDbServerUrl.c_str(), influxDbOrg.c_str(), influxDbBucket.c_str());
+    clientInfluxDB.setConnectionParams(influxDbServerUrl, influxDbOrg, influxDbBucket, influxDbToken, InfluxDbCloud2CACert);
 
-  // Add tags to the data point
-  sensor.addTag("device", "ESP32");
-  sensor.addTag("SSID", WiFi.SSID());
+    // Check InfluxDb connection
+    if (!clientInfluxDB.validateConnection()) {
+      debugE("InfluxDB connection failed: %s\n", clientInfluxDB.getLastErrorMessage().c_str());
+    }
 
-  //++++++++++++++++++++++++++++++++++++++++++++++++
-  // Activation du mDNS responder: encore idée de Bellule
-  // Utiliser l'url : http://companion pour y accéder
-  if (!MDNS.begin("companion")) {
-    log_println("[Init] - Error setting up MDNS responder!");
-    while (1) { delay(1000); }                                // endless loop
+    // Add tags to the data point
+    sensor.addTag("device", "ESP32");
+    sensor.addTag("SSID", WiFi.SSID());
   }
-  // Ajout du service to MDNS-SD
-  MDNS.addService("http", "tcp", 80);
-  log_println("[Init] - mDNS responder started");
 
   //++++++++++++++++++++++++++++++++++++++++++++++++
   // Configuration du broker MQTT (Home Assistant)
@@ -505,6 +608,7 @@ void setup() {
     mqttClient.setServer(mqtt_server.c_str(), 1883);
     mqttClient.setCallback(mqttReceiverCallback);
 
+    // Id unique à partir de l'adresse MAC
     byte mac[6];
     WiFi.macAddress(mac);
     //devUniqueID = uidPrefix +String(mac[0], HEX) +String(mac[1], HEX) +String(mac[2], HEX) +String(mac[3], HEX) + String(mac[4], HEX) + String(mac[5], HEX);
@@ -515,10 +619,8 @@ void setup() {
 
   //++++++++++++++++++++++++++++++++++++++++++++++++
   veille_deb = millis() + TEMPS_VEILLE;
-
   esp_task_wdt_reset();
-
-  log_println("Setup ended.");
+  debugI("[Init] - Setup fin.");
 }
 
 /***************************************************************************************
@@ -529,22 +631,25 @@ void loop() {
   static ulong nextWeatherUpdate = 0UL;
 
   //+++++++++++++++++++++++++++++++
-  // Gestion MQTT
-  if(withMqtt && (WiFi.status() == WL_CONNECTED)) {
-    if(!mqttClient.connected()) {
-      mqttReconnect();                  // Force la reconnexion au broker MQTT en cas de perte
-    }
-    else {
-      mqttClient.loop();
-    }
-  }
-
+  Debug.handle();
+  
   //+++++++++++++++++++++++++++++++
   // Gestion des boutons
   boutonBacklight.tick();
   boutonPage.tick();
   drd->loop();                        // Gestion double reset
 
+  //+++++++++++++++++++++++++++++++
+  // Gestion MQTT
+  if (withMqtt && (WiFi.status() == WL_CONNECTED)) {
+    if (!mqttClient.connected()) {
+      mqttReconnect();                  // Force la reconnexion au broker MQTT en cas de perte
+    }
+     
+    mqttClient.loop();
+  }
+
+  //+++++++++++++++++++++++++++++++
   ulong ms = millis();
 
   // si le Wifi est connecté uniquement
@@ -554,33 +659,42 @@ void loop() {
     if (ms > nextWeatherUpdate) {
       nextWeatherUpdate = ms + UPDATE_METEO_INTERVAL;
 
-      requestMeteo();               // Requète la Météo
-      requestMeteo2();
-      requestMeteo3();
+      //reqMeteo();                   // Requète la Météo via la blbliothèque de OpenWeather
+      reqMeteo2();                 // Requète la Météo sans bibliothèque
+
       syncTime();                   // Synchronisation de l'heure systeme via NTP
       readVbatt();                  // Lecture tension batterie
+
       updateAff = true;
     }
 
     // Requete TEMPO
-    requestTempo(ms);
+    reqTempo();
+    reqTempoTarifs();
 
     // Requete Previ Meteo Solaire
     reqMeteoSolaire(ms);
 
     // Requète des données MSunPV (15sec)
-    bool isUpdate = requestMSunPV(ms);
+    bool isUpdate = reqMSunPV(ms);
     if (isUpdate) {
       updateAff = true;
 
       //+++++++++++++++++++++++
       // Envoi des mesures vers InfluxDB
-      sendInfluxDB();
+      if (withInfluxDB)
+        sendInfluxDB();
 
       //++++++++++++++++++++++++++++++++++++++++++
       // Gestion MQTT - Envoi des mesures en Json
-      if (withMqtt)
+      if (withMqtt){
         mqttSendMesures();
+
+        if (updateTempo) {
+          mqttSendTempo();
+          updateTempo = false;
+        }
+      }
     }
   } 
  
@@ -592,9 +706,15 @@ void loop() {
 
 
 void sendInfluxDB() {
+
+  if (!clientInfluxDB.isConnected()) {
+    return;
+  }
+
   // Store measured value into point
   // Report RSSI of currently connected network
   sensor.addField("rssi", WiFi.RSSI());
+  sensor.addField("runtime", (millis() - uptime) /1000);      // Secondes
 
   sensor.addField("puis_panneaux", powpv);                    // W
   sensor.addField("puis_conso", powreso);                     // W
@@ -602,9 +722,10 @@ void sendInfluxDB() {
   sensor.addField("puis_ballon", powbal);                     // W
   sensor.addField("temp_ballon", tbal);                       // °C
   
-  sensor.addField("cumul_conso", cumulConso);                 // W
-  sensor.addField("cumul_inj", cumulInj);                     // W
-  sensor.addField("cumul_conso", cumulPV_J);                  // W
+  sensor.addField("cumul_conso", cumulConso);                 // kWh
+  sensor.addField("cumul_inj", cumulInj);                     // kWh
+  sensor.addField("cumul_pvj", cumulPV_J);                    // kWh
+  sensor.addField("cumul_pvp", cumulPV_P);                    // kWh
   
   sensor.addField("previ_whday0", forecast_whday[0]);         // W
   sensor.addField("previ_whday1", forecast_whday[1]);         // W
@@ -612,23 +733,25 @@ void sendInfluxDB() {
   sensor.addField("couleur_tempo", codeTempoJ);               // 0 - 3
   sensor.addField("couleur_tempo2", codeTempoJ1);
 
-  sensor.addField("temp", myMeteo->temp);
-  sensor.addField("hum", myMeteo->humidity);                  // %
-  sensor.addField("clouds", myMeteo->clouds);                 // %
-  sensor.addField("wind_speed", myMeteo->wind_speed * 3.6);   // km/h
-  sensor.addField("wind_gust", myMeteo->wind_gust * 3.6);     // km/h
-  sensor.addField("wind_deg", myMeteo->wind_deg);
-  sensor.addField("pressure", myMeteo->pressure);             // pa
-  sensor.addField("rain", myMeteo->rain);                     // mm/h ou l/m2 pat heure
-  sensor.addField("visibility", myMeteo->visibility);
+  sensor.addField("temp", myMeteo.temp);
+  sensor.addField("hum", myMeteo.humidity);                  // %
+  sensor.addField("clouds", myMeteo.clouds);                 // %
+  sensor.addField("wind_speed", myMeteo.wind_speed * 3.6);   // km/h
+  //sensor.addField("wind_gust", myMeteo.wind_gust * 3.6);     // km/h
+  sensor.addField("wind_deg", myMeteo.wind_deg);
+  sensor.addField("pressure", myMeteo.pressure);             // pa
+  sensor.addField("rain", myMeteo.rain);                     // mm/h ou l/m2 pat heure
+  sensor.addField("snow", myMeteo.snow);                     // mm/h ou l/m2 pat heure
+  sensor.addField("visibility", myMeteo.visibility);         // km
 
-  //log_println("InfluxDb write - " +sensor.toLineProtocol());
+  debugD("[InfluxDb] write - %s", sensor.toLineProtocol().c_str());
 
   // Write point
-  if (!client.writePoint(sensor)) {
-    Serial.print("InfluxDB write failed: ");
-    Serial.println(client.getLastErrorMessage());
+  if (!clientInfluxDB.writePoint(sensor)) {
+    debugE("InfluxDB write failed: %s", clientInfluxDB.getLastErrorMessage().c_str());
   }
+
+  clientInfluxDB.checkBuffer();           // Flush buffer
 
   // Clear fields for reusing the point. Tags will remain the same as set above.
   sensor.clearFields();
@@ -636,12 +759,11 @@ void sendInfluxDB() {
 
 
 // Variable used for MQTT Discovery
-const String mqtt_deviceName  = "CompanionIO";                           // Device name
-
-const char* mqtt_deviceModel = "MSunPV Companion";                 // Hardware model
-const char* mqtt_swVersion   = "1.0";                              // Firmware version
-const char* mqtt_manufacturer = "DIY Pzac";                        // Manufecturer name
-const String mqtt_statusTopic = "esp32iotsensor/" + mqtt_deviceName;     // MQTT topic
+const String mqtt_deviceName  = "CompanionIO";                          // Device name
+const char* mqtt_deviceModel = "MSunPV Companion";                      // Hardware model
+const char* mqtt_swVersion   = "1.0";                                   // Firmware version
+const char* mqtt_manufacturer = "DIY Pzac";                             // Manufecturer name
+const String mqtt_statusTopic = "esp32iotsensor/" + mqtt_deviceName;    // MQTT topic
 
 /*****************************************************************************************
 **                    Reconnexion au broker MQTT en cas de perte                        **
@@ -656,16 +778,66 @@ void mqttSendMesures() {
     doc["powpv"]= String(powpv);
     doc["powreso"]= String(powreso);
     doc["outbal"]= String(outbal);
-    doc["tbal"]= String(tbal);
-    doc["enconso"]= String(cumulConso);
-    doc["eninj"]= String(cumulInj);
-    doc["enpvj"]= String(cumulInj);
-    doc["enpvp"]= String(cumulPV_P);
+    doc["tbal"]= String(tbal, 2);
+    doc["enconso"]= String(cumulConso);                   // Conso reso net (import) en kWh (positif)
+    doc["eninj"]= String(0-cumulInj);                     // Export en kWh (positif)
+    doc["enpvj"]= String(0-cumulPV_J);                    // Prod PV jour en kWh (positif)
+    doc["enpvp"]= String(0-cumulPV_P);                    // Prod PV totale en kWh (positif)
+    doc["enconsototale"]= String(cumulConso -cumulPV_J);  // Conso totale (PV + Reso) en kWh (positif)
 
     serializeJson(doc, buff);
+
+    debugD("[MQTT] - send : %s", buff.c_str());
+
     mqttClient.publish(topic.c_str(), buff.c_str());
   }
 }
+
+
+void mqttSendTempo() {
+  const String topic = base_topic + devUniqueID + "/state";
+
+  if (withMqtt && mqttClient.connected()) {
+    JsonDocument doc;
+    String buff;
+
+    doc["tarif_bleu_hp"]= String(tarif_bleu_hp, 3);       // Tarif Tempo
+    doc["tarif_bleu_hc"]= String(tarif_bleu_hc, 3);       // Tarif Tempo
+    doc["tarif_blanc_hp"]= String(tarif_blanc_hp, 3);     // Tarif Tempo
+    doc["tarif_blanc_hp"]= String(tarif_blanc_hc, 3);     // Tarif Tempo
+    doc["tarif_rouge_hp"]= String(tarif_rouge_hp, 3);     // Tarif Tempo
+    doc["tarif_rouge_hp"]= String(tarif_rouge_hc, 3);     // Tarif Tempo
+
+    time_t local_time = TIMEZONE.toLocal(now(), &tz1_Code);       // Convert UTC to local time, returns zone code in tz1_Code, e.g "GMT"
+    int hh = hour(local_time);
+    bool is_hc = ((hh >= 22) || (hh < 6));
+    switch (codeTempoJ) {
+        case 1:
+          doc["tempo_tarif_current"]= (is_hc ? tarif_bleu_hc : tarif_bleu_hp);
+        break;
+        case 2:
+          doc["tempo_tarif_current"]= (is_hc ? tarif_blanc_hc : tarif_blanc_hp);
+        break;
+        case 3:
+          doc["tempo_tarif_current"]= (is_hc ? tarif_rouge_hc : tarif_rouge_hp);
+        break;
+        default:
+          doc["tempo_tarif_current"]= "?";
+        break;
+    }
+
+    doc["tempo_j"]= codeTempoJ;
+    doc["tempo_j1"]= codeTempoJ1;
+    doc["tempo_hc"]= is_hc ? 1 : 0;
+
+    serializeJson(doc, buff);
+
+    debugD("[MQTT] - send : %s", buff.c_str());
+
+    mqttClient.publish(topic.c_str(), buff.c_str());
+  }
+}
+ 
 
 /*****************************************************************************************
 **                    Reconnexion au broker MQTT en cas de perte                        **
@@ -686,10 +858,10 @@ void mqttReconnect() {
         nextReconnect = ms + 5000l;
       }
 
-      Serial.println("[MQTT] - Connection au broker !");
+      debugI("[MQTT] - Connection au broker !");
 
       if (mqttClient.connect(mqtt_deviceName.c_str(), mqtt_user.c_str(), mqtt_pwd.c_str())) {
-        Serial.println("[MQTT] - Reconnecté au broker !");
+        debugD("[MQTT] - Reconnecté au broker !");
         delay(100);
 
         mqttHaDiscovery();     // Send Discovery Data
@@ -699,230 +871,132 @@ void mqttReconnect() {
         mqttCounterConn=0;
       }
       else {
-        Serial.print(F("[MQTT] - Broker MQTT indisponible. Status= "));
-        Serial.println(mqttClient.state());
+        debugE("[MQTT] - Broker MQTT indisponible. Status= %d", mqttClient.state());
       }
     }
   }
 }
 
+void discovSensor(const char* name, const char* devClass, const char* unit, const char* icon = nullptr, bool cmd_t = false);
+
+void discovSensor(const char* name, const char* devClass, const char* unit, const char* icon, bool cmd_t) {
+  JsonDocument payload;
+  String buf;
+  String nameStr = String(name);
+  String id = devUniqueID + String("_") + nameStr;
+  const String bt = "homeassistant/sensor/";
+  String topic = bt + id + "/config";
+    
+  payload["name"] = "MSunPV-" + nameStr;
+  payload["uniq_id"] = id;
+  payload["state_topic"] = bt + devUniqueID + "/state";
+  if (cmd_t) payload["command_topic"] = bt + id + "/set";
+  if (devClass) payload["dev_cla"] = devClass;
+  if (icon) payload["icon"] = icon;
+  if (unit) payload["unit_of_meas"] = unit;
+
+  payload["val_tpl"] = "{{ value_json." +nameStr +" | is_defined }}";
+
+  //JsonObject device = payload.createNestedObject("device");
+  JsonObject device = payload["device"].to<JsonObject>();
+  device["name"] = mqtt_deviceName;
+  //JsonArray identifiers = device.createNestedArray("identifiers");
+  JsonArray identifiers = device["identifiers"].to<JsonArray>();
+  identifiers.add(devUniqueID);
+
+  serializeJson(payload, buf);
+  debugD("HA dh - topic= %s", topic.c_str());
+  debugD("HA dh - payload= %s", buf.c_str());
+  mqttClient.publish(topic.c_str(), buf.c_str());
+
+}
+
+void discovBinSensor(String name, String devClass, String unit, String icon, bool cmd_t) {
+  JsonDocument payload;
+  String buf;
+  String id = devUniqueID + "_" + name;
+  String topic = base_topic + devUniqueID + "/config";
+  String st = base_topic + devUniqueID + "/state";
+    
+  payload["name"] = "MSunPV-" +name;
+  payload["uniq_id"] = id;
+  payload["state_topic"] = st;
+  if (cmd_t) payload["command_topic"] = base_topic + devUniqueID + "/set";
+  if (devClass) payload["dev_cla"] = devClass;
+  if (icone) payload["icon"] = icon;
+  if (unit) payload["unit_of_meas"] = unit;
+
+  payload["val_tpl"] = "{{ value_json." +name +" | is_defined }}";
+
+  //JsonObject device = payload.createNestedObject("device");
+  JsonObject device = payload["device"].to<JsonObject>();
+  device[name] = mqtt_deviceName;
+  //JsonArray identifiers = device.createNestedArray("identifiers");
+  JsonArray identifiers = device["identifiers"].to<JsonArray>();
+  identifiers.add(devUniqueID);
+
+  serializeJson(payload, buf);
+  debugD("HA dh - topic= %s", topic.c_str());
+  debugD("HA dh - payload= %s", buf.c_str());
+  mqttClient.publish(topic.c_str(), buf.c_str());
+
+}
+
+
 /*****************************************************************************************
 **                      MQTT Home Assistant Discovery                                   **
 *****************************************************************************************/
-void mqttHaDiscovery()
-{
-  if(withMqtt && mqttClient.connected())
+void mqttHaDiscovery() {
+  if (withMqtt && mqttClient.connected())
   {
-    log_println("[MQTT] - Send Discovery !!!");
+    debugI("[MQTT] - Send Discovery !!!");
 
-    JsonDocument payload;
-    JsonObject device;
-    JsonArray identifiers;
-    String buf;
-    String topic;
-    String id;
-    String st;
- 
-    //----------------------------------------------------------------
-    id = devUniqueID + "_powpv";
-    topic = base_topic + id + "/config";
-    st = base_topic + devUniqueID + "/state";
-    
-    payload["name"] = "MSunPV-PowPV";
-    payload["uniq_id"] = id;
-    payload["state_topic"] = st;
-    payload["dev_cla"] = "power";
-    payload["unit_of_meas"] = "W";
-    payload["val_tpl"] = "{{ value_json.powpv | is_defined }}";
+    discovSensor("powpv", "power", "W");
+    discovSensor("powreso", "power", "W");
+    discovSensor("outbal", nullptr, "%");
+    discovSensor("outrad", nullptr, "%");
 
-    device = payload.createNestedObject("device");
-    device["name"] = mqtt_deviceName;
-    device["model"] = mqtt_deviceModel;
-    device["sw_version"] = mqtt_swVersion;
-    device["manufacturer"] = mqtt_manufacturer;
-    identifiers = device.createNestedArray("identifiers");
-    identifiers.add(devUniqueID);
+    discovSensor("tbal", "temperature", "°C");
+    discovSensor("enconso", "energy", "kWh");
+    discovSensor("eninj", "energy", "kWh");
+    discovSensor("enpvj", "energy", "kWh");
+    discovSensor("enpvp", "energy", "kWh");
+    discovSensor("enconsototale", "energy", "kWh");
 
-    serializeJson(payload, buf);
-    log_println("HA - Topic= " +topic);
-    log_println("HA - Payload= " +buf);
-    mqttClient.publish(topic.c_str(), buf.c_str());
+    discovSensor("tempo_tarif_bleu_hp", "tarif", "€");
+    discovSensor("tempo_tarif_bleu_hc", "tarif", "€");
+    discovSensor("tempo_tarif_blanc_hp", "tarif", "€");
+    discovSensor("tempo_tarif_blanc_hc", "tarif", "€");
+    discovSensor("tempo_tarif_rouge_hp", "tarif", "€");
+    discovSensor("tempo_tarif_rouge_hc", "tarif", "€");
 
-    //----------------------------------------------------------------
-    id = devUniqueID + "_powreso";
-    topic = base_topic + id + "/config";
-    st = base_topic + devUniqueID + "/state";
-    
-    payload.clear();
-    payload["name"] = "MSunPV-PowReso";
-    payload["uniq_id"] = id;
-    payload["state_topic"] = st;
-    payload["dev_cla"] = "power";
-    payload["unit_of_meas"] = "W";
-    payload["val_tpl"] = "{{ value_json.powreso | is_defined }}";
+    discovSensor("tempo_tarif_current", "tarif", "€");
+    discovSensor("tempo_hp_on", "tarif", "€");
 
-    device = payload.createNestedObject("device");
-    identifiers = device.createNestedArray("identifiers");
-    identifiers.add(devUniqueID);
-
-    serializeJson(payload, buf);
-    log_println("HA - Topic= " +topic);
-    log_println("HA - Payload= " +buf);
-    mqttClient.publish(topic.c_str(), buf.c_str());
-
-    //----------------------------------------------------------------
-    id = devUniqueID + "_outbal";
-    topic = base_topic + id + "/config";
-    st = base_topic + devUniqueID + "/state";
-    
-    payload.clear();
-    payload["name"] = "MSunPV-OutBal";
-    payload["uniq_id"] = id;
-    payload["state_topic"] = st;
-    //payload["dev_cla"] = "power";
-    payload["unit_of_meas"] = "%";
-    payload["val_tpl"] = "{{ value_json.outbal | is_defined }}";
-
-    device = payload.createNestedObject("device");
-    identifiers = device.createNestedArray("identifiers");
-    identifiers.add(devUniqueID);
-
-    serializeJson(payload, buf);
-    log_println("HA - Topic= " +topic);
-    log_println("HA - Payload= " +buf);
-    mqttClient.publish(topic.c_str(), buf.c_str());
-
-    //----------------------------------------------------------------
-    id = devUniqueID + "_tbal";
-    topic = base_topic + id + "/config";
-    st = base_topic + devUniqueID + "/state";
-
-    payload.clear();
-    payload["name"] = "MSunPV-TBal";
-    payload["uniq_id"] = id;
-    payload["state_topic"] = st;
-    payload["dev_cla"] = "temperature";
-    payload["unit_of_meas"] = "°C";
-    payload["val_tpl"] = "{{ value_json.tbal | is_defined }}";
-
-    device = payload.createNestedObject("device");
-    identifiers = device.createNestedArray("identifiers");
-    identifiers.add(devUniqueID);
-
-    serializeJson(payload, buf);
-    log_println("HA - Topic= " +topic);
-    log_println("HA - Payload= " +buf);
-    mqttClient.publish(topic.c_str(), buf.c_str());
-
-    //----------------------------------------------------------------
-    id = devUniqueID + "_enconso";
-    topic = base_topic + id + "/config";
-    st = base_topic + devUniqueID + "/state";
-    
-    payload.clear();
-    payload["name"] = "MSunPV-EnConso";
-    payload["uniq_id"] = id;
-    payload["state_topic"] = st;
-    payload["dev_cla"] = "energy";
-    payload["unit_of_meas"] = "Wh";
-    payload["val_tpl"] = "{{ value_json.enconso | is_defined }}";
-
-    device = payload.createNestedObject("device");
-    identifiers = device.createNestedArray("identifiers");
-    identifiers.add(devUniqueID);
-
-    serializeJson(payload, buf);
-    log_println("HA - Topic= " +topic);
-    log_println("HA - Payload= " +buf);
-    mqttClient.publish(topic.c_str(), buf.c_str());
-
-    //----------------------------------------------------------------
-    id = devUniqueID + "_eninj";
-    topic = base_topic + id + "/config";
-    st = base_topic + devUniqueID + "/state";
-    
-    payload.clear();
-    payload["name"] = "MSunPV-EnInj";
-    payload["uniq_id"] = id;
-    payload["state_topic"] = st;
-    payload["dev_cla"] = "energy";
-    payload["unit_of_meas"] = "Wh";
-    payload["val_tpl"] = "{{ value_json.eninj | is_defined }}";
-
-    device = payload.createNestedObject("device");
-    identifiers = device.createNestedArray("identifiers");
-    identifiers.add(devUniqueID);
-
-    serializeJson(payload, buf);
-    log_println("HA - Topic= " +topic);
-    log_println("HA - Payload= " +buf);
-    mqttClient.publish(topic.c_str(), buf.c_str());
-
-    //----------------------------------------------------------------
-    id = devUniqueID + "_enpvj";
-    topic = base_topic + id + "/config";
-    st = base_topic + devUniqueID + "/state";
-    
-    payload.clear();
-    payload["name"] = "MSunPV-EnPV_J";
-    payload["uniq_id"] = id;
-    payload["state_topic"] = st;
-    payload["dev_cla"] = "energy";
-    payload["unit_of_meas"] = "Wh";
-    payload["val_tpl"] = "{{ value_json.enpvj | is_defined }}";
-
-    device = payload.createNestedObject("device");
-    identifiers = device.createNestedArray("identifiers");
-    identifiers.add(devUniqueID);
-
-    serializeJson(payload, buf);
-    log_println("HA - Topic= " +topic);
-    log_println("HA - Payload= " +buf);
-    mqttClient.publish(topic.c_str(), buf.c_str());
-
-    //----------------------------------------------------------------
-    id = devUniqueID + "_enpvp";
-    topic = base_topic + id + "/config";
-    st = base_topic + devUniqueID + "/state";
-    
-    payload.clear();
-    payload["name"] = "MSunPV-EnPV_P";
-    payload["uniq_id"] = id;
-    payload["state_topic"] = st;
-    payload["dev_cla"] = "energy";
-    payload["unit_of_meas"] = "kWh";
-    payload["val_tpl"] = "{{ value_json.enpvp | is_defined }}";
-
-    device = payload.createNestedObject("device");
-    identifiers = device.createNestedArray("identifiers");
-    identifiers.add(devUniqueID);
-
-    serializeJson(payload, buf);
-    log_println("HA - Topic= " +topic);
-    log_println("HA - Payload= " +buf);
-    mqttClient.publish(topic.c_str(), buf.c_str());
+    discovSensor("tempo_j", "", "");
+    discovSensor("tempo_j1", "", "");
+    discovSensor("tempo_hc", "", "");
   }
 }
+
 
 /*****************************************************************************************
 **                                   Routine callback                                   **
 *****************************************************************************************/
 void mqttReceiverCallback(char* topic, byte* inFrame, unsigned int length) 
 {
-    Serial.print("MQTT - Message arrived on topic: ");
-    Serial.print(topic);
-    Serial.print(". Message: ");
-    byte state = 0;
-    String messageTemp;
+    debugD("[MQTT] - Message receved on topic: %s", topic);
+    String msg;
     
     for (int i = 0; i < length; i++) {
-        Serial.print((char)inFrame[i]);
-        messageTemp += (char)inFrame[i];
+        msg += (char)inFrame[i];
     }
-    Serial.println();
 
-    if(strcmp(topicHAStatus, topic) == 0) {
-      if(messageTemp == "online") {
+    debugD("[MQTT] - receved message : ", msg.c_str());
+
+    if (strcmp(topicHAStatus, topic) == 0) {
+      // Si message de démarrage de Home Assistant
+      if (msg == "online") {
         mqttHaDiscovery();
       }
     }
@@ -996,9 +1070,9 @@ const char index_html[] PROGMEM = R"rawliteral(
 )rawliteral";
 
 // Replaces placeholder with button section in your web page
-String processor(const String& var){
-  //log_println(var);
-  if(var == "TITRE_LONG"){
+String processor(const String& var) {
+  debugD("process : %s", var.c_str());
+  if (var == "TITRE_LONG") {
     return TITRE_LONG;
   }
   else if (var == "PUIS_PANNEAU") {
@@ -1038,6 +1112,21 @@ void initWebServer() {
   // ATTENTION Danger - Permet l'acces a tous les fichiers du Filesystem
   webserver.serveStatic("/", LittleFS, "/");
 
+  //Handle web callbacks for enabling or disabling discovery (using this method is just one of many ways to do this)
+  webserver.on("/discovery_on", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send_P(200, "text/html", "<h1>Discovery ON...<h1><h3>Home Assistant MQTT Discovery enabled</h3>");
+    delay(200);
+    auto_discovery = true;
+    mqttHaDiscovery();
+  });
+  
+  webserver.on("/discovery_off", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send_P(200, "text/html", "<h1>Discovery OFF...<h1><h3>Home Assistant MQTT Discovery disabled. Previous entities removed.</h3>");
+    delay(200);
+    auto_discovery = false;
+    mqttHaDiscovery();
+  });
+
   webserver.begin();
 }
 
@@ -1052,8 +1141,8 @@ void doAffichage()
 
   // Retour à la page par defaut, apres le temp d'affichage
   if ((page != PAGE_DEFAULT) && (ms > tempsAffPage)) {
-      page = PAGE_DEFAULT;
-      updateAff = true;
+    page = PAGE_DEFAULT;
+    updateAff = true;
   }
 
   // Mise en veille écran
@@ -1064,7 +1153,6 @@ void doAffichage()
 
   if (updateAff) {
     updateAff= false;
-    //log_println("doAffichage");
 
     if (page == PAGE_DEFAULT) {
       AffichageDefault();
@@ -1101,11 +1189,11 @@ void doAffichage()
 void AffichageDefault() {
   String valStr;
 
-  //test(); // teste les affichages
-
   //  Dessin fenêtre principale
   sprite.fillSprite(TFT_BLACK);
-  sprite.setTextColor(TFT_WHITE, TFT_BLACK);
+  sprite.setTextColor(TFT_WHITE, TFT_BLACK);                      // Retour texte normal
+  sprite.setFreeFont(&Orbitron_Light_24);                         // police d'affichage
+  //sprite.setFreeFont(&Roboto_Thin_24);
 
   uint16_t couleurfond = TFT_BLACK;
   uint16_t couleurtexte = TFT_WHITE;
@@ -1121,7 +1209,6 @@ void AffichageDefault() {
     couleurfond = FOND_ROUGE;
     couleurtexte = TFT_WHITE;
   } 
-
 
   //++++++++++++++++++++++++++++++++++++++++++++++++++++
   // Affichage Météo
@@ -1144,7 +1231,7 @@ void AffichageDefault() {
 
   // Affiche température extérieure
   if (tempExt < 3.0) {
-    sprite.setTextColor(TFT_CYAN, TFT_BLACK);   // Rique de gel, on affiche en bleu clair
+    sprite.setTextColor(TFT_CYAN, TFT_BLACK);   // Risque de gel, on affiche en bleu clair
   }
   sprite.setTextDatum(MR_DATUM);                // centre droit
   valStr = String(tempExt, 1) + "`C";           // °C (probleme de police TFT_eSPY)
@@ -1153,10 +1240,10 @@ void AffichageDefault() {
   //++++++++++++++++++++++++++++++++++++++++++++++++++++
   // Affichage heure et date
   sprite.drawRoundRect(234,  0, 86, 54, RECT_RADIUS, TFT_WHITE);
-  sprite.setTextDatum(MC_DATUM);  // retour au centre milieu
-  sprite.setTextColor(TFT_WHITE, TFT_BLACK);  // Retour texte normal
+  sprite.setTextDatum(MC_DATUM);                                  // retour au centre milieu
+  sprite.setTextColor(TFT_WHITE, TFT_BLACK);                      // Retour texte normal
   time_t timeNow = now();
-  String timeStr = strTime(timeNow);                              // La convertion en local est faite au formatage
+  String timeStr = formatHeure(timeNow);                          // La convertion en local est faite au formatage
   time_t local_time = TIMEZONE.toLocal(timeNow, &tz1_Code);       // Convert UTC to local time, returns zone code in tz1_Code, e.g "GMT"
   String dateStr = String(day(local_time)) + " " +String(Months[month(local_time)]);
   sprite.drawString(timeStr, 277, 20, 4);
@@ -1164,26 +1251,18 @@ void AffichageDefault() {
 
   //++++++++++++++++++++++++++++++++++++++++++++++++++++
   // Affichage de la température Ballon (si withTBal validée)
-  if (withTBal && (tbal >= 1)) {
-
+  if (withTBal && (tbal >= 1.)) {
     uint16_t couleur;
-    if (tbal >= 60)      couleur = color5;
-    else if (tbal >= 50) couleur = color4;
-    else if (tbal >= 40) couleur = color8;
-    else                        couleur = color1;
+    if (tbal >= 60.)      couleur = color5;
+    else if (tbal >= 50.) couleur = color4;
+    else if (tbal >= 40.) couleur = color8;
+    else                  couleur = color1;
     sprite.fillCircle(27, 84, 24, couleur);
 
-    sprite.setTextColor(TFT_WHITE);             // Retour texte normal
-    sprite.setTextDatum(MC_DATUM);              // retour au centre milieu
-    //sprite.drawString(String(temp_ballon, 0) + "`", 26, 85, 2);   //°C (probleme de police TFT_eSPY)
-    sprite.drawString(String(tbal, 0) + "`", 26, 80);   //°C (probleme de police TFT_eSPY)
+    sprite.setTextColor(TFT_WHITE);                               // Retour texte normal
+    sprite.setTextDatum(MC_DATUM);                                // retour au centre milieu
+    sprite.drawString(String(tbal, 0) + "`", 26, 80);             //°C (probleme de police TFT_eSPY)
   }
-
-  //++++++++++++++++++++++++++++++++++++++++++++++++++++
-  // Affichage des valeurs des compteurs
-  sprite.setTextColor(TFT_WHITE, TFT_BLACK);  // Retour texte normal
-  sprite.setFreeFont(&Orbitron_Light_24);  // police d'affichage
-  //sprite.setFreeFont(&Roboto_Thin_24);
 
   //++++++++++++++++++++++++++++++++++++++++++++++++++++
   // Affichage Panneaux  Solaire
@@ -1193,7 +1272,8 @@ void AffichageDefault() {
   if (powpv >= residuel) {
     valStr = String(powpv) + " W";
     sprite.drawString(valStr, 115, 35);
-  } else {
+  } 
+  else {
     // Hors service & lever/coucher
     sprite.setSwapBytes(true);
     sprite.pushImage(3, 20, 220, 29, Soleil);                     // Image "Hors service" avec levé et coucher du soleil
@@ -1208,17 +1288,15 @@ void AffichageDefault() {
   // Affichage valeur Cumulus
   sprite.drawRoundRect(0, 57, 226, 55, RECT_RADIUS, TFT_WHITE);   // Zone Cumulus
   sprite.drawString("ROUTAGE CUMULUS", 115, 68, 2);
-
   valStr = String(outbal) + " %";
   sprite.drawString(valStr, 115, 92);
 
   //++++++++++++++++++++++++++++++++++++++++++++++++++++
   // Affichage valeur Consommation
   sprite.setTextColor(couleurtexte, couleurfond);
-  sprite.fillRoundRect(0, 114, 226, 55, RECT_RADIUS, couleurfond);  // Zone Conso
-  sprite.drawRoundRect(0, 114, 226, 55, RECT_RADIUS, couleurtexte);  // Zone Conso
+  sprite.fillRoundRect(0, 114, 226, 55, RECT_RADIUS, couleurfond);    // Affiche Couleur Tempo sur fond Zone Conso
+  sprite.drawRoundRect(0, 114, 226, 55, RECT_RADIUS, couleurtexte);   // Zone Conso
   sprite.drawString((powreso < 0) ? "INJECTION RESEAU" : "CONSOMMATION RESEAU", 115, 126, 2);
-
   valStr = String(powreso) + " W";
   sprite.drawString(valStr, 115, 150);
 
@@ -1240,7 +1318,7 @@ void AffichageDefault() {
   //int puis_disp = puis_ballon - puis_conso; 
   int puis_disp = 0;
   if ((powreso <0) && (outbal >90)) 
-    puis_disp = -1 * powreso;                                  // Ballon plein, coupé par thermostat mécanique
+    puis_disp = 0 - powreso;                                // Ballon plein, coupé par thermostat mécanique
   else if ((powreso >0) && (outbal >10))
     puis_disp = powbal;                                      // ballon en chauffe 
   
@@ -1257,13 +1335,12 @@ void AffichageDefault() {
 
   //++++++++++++++++++++++++++++++++++++++++++++++++++++
   // En cas de chauffage électrique
-  if (withRad && ((powreso + powpv) > 3000) && (powbal < 100))   // Si forte conso et ballon coupé
-  {
+  if (withRad && ((powreso + powpv) > 3000) && (powbal < 100)) {   // Si forte conso et ballon coupé
     sprite.pushImage(6, 122, 40, 40, chauffage);
   }
 
   //++++++++++++++++++++++++++++++++++++++++++++++++++++
-  // Affichage des graphes latéraux
+  // Affichage des Bargraphes latéraux
   int nbbarres;
 
   //++++++++++++++++++++++++++++++++++++++++
@@ -1275,7 +1352,7 @@ void AffichageDefault() {
 
   //++++++++++++++++++++++++++++++++++++++++
   // Bargraphe Cumulus
-  nbbarres = (8 * outbal) / 100;                     // puis_balllon est en pourcent (0-100%)
+  nbbarres = (8 * outbal) / 100;
   barregraphV(200, 107, nbbarres, 8, 20, 5, 1, color4);     // en orange
 
   //++++++++++++++++++++++++++++++++++++++++
@@ -1409,19 +1486,19 @@ void AfficheMeteo() {
   int x1= 0, x2= 40, x3= 140, x4= 180, x5= 240, x6= 300 ; 
   int yy= 20;
 
-  sprite.drawString("Temp.", x1, yy, 2);  sprite.drawString(String(myMeteo->temp,1 ) +"`C", x2, yy, 2);   
-    sprite.drawString("Humi", x3, yy, 2); sprite.drawString(String(myMeteo->humidity) +"%", x4, yy, 2);
+  sprite.drawString("Temp.", x1, yy, 2);  sprite.drawString(String(myMeteo.temp,1 ) +"`C", x2, yy, 2);   
+    sprite.drawString("Humi", x3, yy, 2); sprite.drawString(String(myMeteo.humidity) +"%", x4, yy, 2);
     yy +=16;
 
-  sprite.drawString("Vent", x1, yy, 2);   sprite.drawString(String(myMeteo->wind_speed, 1) +"/" +String(myMeteo->wind_gust, 1), x2, yy, 2);
-    sprite.drawString("Dir", x3, yy, 2);  sprite.drawString(String(myMeteo->wind_deg) +"`", x4, yy, 2);
+  sprite.drawString("Vent", x1, yy, 2);   sprite.drawString(String(myMeteo.wind_speed, 1) +"/" +String(myMeteo.wind_gust, 1) +"m/s", x2, yy, 2);
+    sprite.drawString("Dir", x3, yy, 2);  sprite.drawString(String(myMeteo.wind_deg) +"`", x4, yy, 2);
     yy +=16;
 
-  sprite.drawString("Pres", x1, yy, 2);   sprite.drawString(String(myMeteo->pressure, 0)+"hPa", x2, yy, 2);
+  sprite.drawString("Pres", x1, yy, 2);   sprite.drawString(String(myMeteo.pressure, 0)+"hPa", x2, yy, 2);
     yy +=16;
 
-  sprite.drawString("Nuage", x1, yy, 2);   sprite.drawString(String(myMeteo->clouds), x2, yy, 2);
-    sprite.drawString("Pluie", x3, yy, 2); sprite.drawString(String(myMeteo->rain, 1), x4, yy, 2);
+  sprite.drawString("Nuage", x1, yy, 2);   sprite.drawString(String(myMeteo.clouds) +"%", x2, yy, 2);
+    sprite.drawString("Pluie", x3, yy, 2); sprite.drawString(String(myMeteo.rain, 3) +"mm", x4, yy, 2);
     yy +=16;
 
   //sprite.drawString("Fiab.", x1, yy, 2);  sprite.drawString(String(meteoFeels, 1), x2, yy, 2);
@@ -1434,7 +1511,7 @@ void AfficheMeteo() {
 const char* getMeteoconIcon(uint16_t id, bool today)
 {
   if ( today && (id/100 == 8) 
-    && (myMeteo->dt < myMeteo->lever || myMeteo->dt > myMeteo->coucher)) 
+    && (myMeteo.dt < myMeteo.lever || myMeteo.dt > myMeteo.coucher)) 
     id += 1000; 
 
   if (id/100 == 2) return "thunderstorm";
@@ -1498,42 +1575,40 @@ void AfficheMeteo2() {
   sprite.setTextDatum(BL_DATUM);
 
   // Temperature
-  sprite.drawString(String(myMeteo->temp, 1) +"°C", x1, yy);
+  sprite.drawString("T " + String(myMeteo.temp, 1) +"°C", x1, yy);
 
   // Humidité
   sprite.setTextDatum(BR_DATUM);
-  sprite.drawString("H " +String(myMeteo->humidity) +"%", x2, yy);
+  sprite.drawString("H " + String(myMeteo.humidity) +"%", x2, yy);
+  yy+=34;
+
+  // Pression
+  sprite.drawString("P " + String(myMeteo.pressure, 0) +"hPa", x1, yy);
   yy+=34;
 
   // Nébulosité
   sprite.setTextDatum(BL_DATUM);
-  sprite.drawString("Neb " +String(myMeteo->clouds) +"%", x1, yy);
+  sprite.drawString("Neb " + String(myMeteo.clouds) +"%", x1, yy);
   yy+=34;
 
   // Pluie
-  sprite.drawString("P " +String(myMeteo->rain, 1) +"mm/h", x1, yy);
-  yy+=34;
-
-  // Pression
-  sprite.drawString(String(myMeteo->pressure, 0) +"hPa", x1, yy);
+  sprite.drawString("Plu " + String(myMeteo.rain, 1) +"mm", x1, yy);
   yy+=34;
 
   // Vent
-  sprite.drawString(String(myMeteo->wind_speed * 3.6, 0) +"km/h", x1, yy);
-  sprite.setTextDatum(BR_DATUM);
-  sprite.drawString(String(myMeteo->wind_deg) +"°", x2, yy);
+  sprite.drawString("W " + String(myMeteo.wind_speed * 3.6, 0) +"km/h - " +myMeteo.wind_deg +"°", x1, yy);
 
   //sprite.setTextColor(TFT_ORANGE, TFT_BLACK);
 
   // Icone
-  String weatherIcon = getMeteoconIcon(myMeteo->ID.toInt(), true);
+  String weatherIcon = getMeteoconIcon(myMeteo.ID.toInt(), true);
   ui.drawBmp(&sprite, "/icon/" + weatherIcon + ".bmp", 219, 35);
 
 /*
   // Description
   sprite.loadFont(AA_FONT_SMALL2, LittleFS);
   sprite.setTextDatum(BR_DATUM);
-  String weatherText = myMeteo->description;
+  String weatherText = myMeteo.description;
   weatherText.toLowerCase();
 
   sprite.setTextColor(TFT_ORANGE, TFT_BLACK);
@@ -1562,12 +1637,12 @@ void AfficheSolar() {
   sprite.setTextDatum(BL_DATUM);
 
   if (pCaractPV == 0) {
-    log_println ("pCaractPV = 0");
+    debugE("[AfficheSolar] - pCaractPV == 0");
     return;
   }
 
   if (forecast_size == 0) {
-    log_println ("forecast_size = 0");
+    debugE("[AfficheSolar] - forecast_size == 0");
     sprite.setTextDatum(BC_DATUM);
     sprite.drawString("No data", LCD_CENTER_X, LCD_CENTER_Y, 4);
     sprite.pushSprite(0, 0);
@@ -1575,7 +1650,7 @@ void AfficheSolar() {
   }
 
   // Graduations verticale tous les 1Kw
-  int kw = pCaractPV/1000;
+  int kw = pCaractPV / 1000;
   for (int ii=0 ; ii < kw ; ii++) {
     sprite.drawFastHLine(0, 150 -((150*ii)/kw), 319, TFT_DARKGREY);
     if (ii >0)
@@ -1608,13 +1683,14 @@ void AfficheSolar() {
   sprite.drawString(String(float(forecast_whday[0]) /1000., 1) +"kWh", 149, 15, 2);
   sprite.drawString(String(float(forecast_whday[1]) /1000., 1) +"kWh", 319, 15, 2);
 
+  // Nb interogation restantes
   sprite.drawString(String(ratelimit_remaining), 319, 35, 2);
 
   sprite.pushSprite(0, 0);
 }
 
 /***************************************************************************************
-** Affichage page de de reglage de la luminosité écran
+** Affichage page de reglage de la luminosité écran
 **
 ***************************************************************************************/
 void AfficheLumi() {
@@ -1655,188 +1731,171 @@ void barregraphV (int xx, int yy, int barres, int barresMax, int largeur, int pa
 **                           Réception des données météo
 **                 Valeurs issues de Open Weather (Gestion Forecast)
 ***************************************************************************************/
-void requestMeteo() {
+void reqMeteo() {
+  debugI("[Meteo] - Weather from OpenWeather");
 
-  // Valeurs issues de Open Weather (Gestion Forecast)
   OW_forecast *forecast = new OW_forecast;
-
   ow.partialDataSet(false); // Collect a subset of the data available
 
-  // Interogation de la météo
-
-  // Previsions 3H sur 24h (API Openweather Map 2.5 Forecast (gratuit))
-  bool parsed  = ow.getForecast(forecast, ow_api_key, ow_latitude, ow_longitude, ow_units, ow_language);
-  if (parsed) {
-    log_println("[Meteo] - Weather from OpenWeather");
-    String msg = "[Meteo] - Heures previsions :";
-    for (int ii=0 ; ii<8; ii++)
-      msg += " " +strTime(forecast->dt[ii]);
-    log_println(msg);
-
-    log_println("[Meteo] - Position : Lat: " +String(ow.lat) +", Long: " +String(ow.lon));
-    log_println("[Meteo] - Ville    : " +String(forecast->city_name) +"  - Lat: " +String(ow.lat) +", Long: " +String(ow.lon));
-    log_println("[Meteo] - Soleil   : Lever: " +strTime(forecast->sunrise) +" - Coucher: " +strTime(forecast->sunset));
-
-    for (int ii=0 ; ii<8; ii++) {
-      msg = "[Meteo] - Prévis. de " +strTime(forecast->dt[ii]) 
-        +" : Temp: " +String(forecast->temp[ii]) 
-        +"°C, Hum: " +String(forecast->humidity[ii])
-        +"%, Vent: "  +String(forecast->wind_speed[ii]) 
-        +", Dir: "    +String(forecast->wind_deg[ii])
-        +"°, Pres: " +String(forecast->pressure[ii], 0)
-        +"hPa, Main: " +forecast->main[ii] 
-        +", Desc: "  +forecast->description[ii]
-        +", Icone: "  +forecast->icon[ii] 
-        +" - ID: "    +String(forecast->id[ii]);
-      log_println(msg);
-    }
-
-    myMeteo->lever = strTime(forecast->sunrise);
-    myMeteo->coucher = strTime(forecast->sunset);
-
-    myMeteo->temp       = forecast->temp[0];
-    myMeteo->feels_like = 0;
-    myMeteo->humidity   = forecast->humidity[0];
-    myMeteo->pressure   = forecast->pressure[0];
-
-    myMeteo->clouds     = forecast->clouds_all[0];
-    myMeteo->visibility = forecast->visibility[0];
-    myMeteo->rain       = 0;
-
-    myMeteo->wind_deg   = forecast->wind_deg[0];
-    myMeteo->wind_gust  = forecast->wind_gust[0];
-    myMeteo->wind_speed = forecast->wind_speed[0];
-
-    myMeteo->icone      = forecast->icon[0];
-    myMeteo->ID         = forecast->id[0];
-    myMeteo->main       = forecast->main[0];
-    myMeteo->description = forecast->description[0];
-
-    myMeteo->dt         = strTime(forecast->dt[0]);
-    myMeteo->name       = forecast->city_name;
-
-    msg = "[Meteo] - dt= " +myMeteo->dt 
-      +", lever= " +myMeteo->lever 
-      +", coucher= " +myMeteo->coucher
-      +", temp= " +String(myMeteo->temp, 1) +"°"
-      +", fells_like= " +String(myMeteo->feels_like, 1) +"°"
-      +", hum= " +String(myMeteo->humidity) +"%"
-      +", press= " +String(myMeteo->pressure, 0) +"hPa"
-      +", clouds= " +String(myMeteo->clouds)
-      +", visi= " +String(myMeteo->visibility)
-      +", rain= " +String(myMeteo->rain, 1)
-      +", vent= " +String(myMeteo->wind_speed, 1)
-      +", rafale= " +String(myMeteo->wind_gust, 1)
-      +", dir= " +String(myMeteo->wind_deg) +"°"
-      +", icone= " +myMeteo->icone
-      +", id= " +myMeteo->ID
-      +"; main= " +myMeteo->main
-      +", desc= " +myMeteo->description
-      +", name= " +myMeteo->name;
-
-    log_println(msg);
-
-    lever = strTime(forecast->sunrise);
-    coucher = strTime(forecast->sunset);
-    tempExt = forecast->temp[0];
-    icone = (forecast->icon[0]);
-    ID = (forecast->id[0]);
+  // Previsions à 3H sur 24h (API Openweather Map 2.5 Forecast (gratuit))
+  if (!ow.getForecast(forecast, ow_api_key, ow_latitude, ow_longitude, "metric", "fr")) {
+    debugE("[Meteo] - getForecast error");
+    return;
   }
-  else {
-    log_println("[Meteo] - Failed to get data points");
+
+  debugD("[Meteo] - Position : Lat: %f, Long: %f, Ville: ", ow.lat, ow.lon, forecast->city_name.c_str());
+  debugD("[Meteo] - Soleil   : Lever: %s - Coucher: %s", formatHeure(forecast->sunrise), formatHeure(forecast->sunset));
+  String msg = "[Meteo] - Heures previsions :";
+  for (int ii=0 ; ii<8; ii++) msg += " " +formatHeure(forecast->dt[ii]);
+  debugD("%s", msg.c_str());
+
+  for (int ii=0 ; ii<8; ii++) {
+    debugD("[Meteo] - Prévis. de %s : T: %.1f°C, H: %d%%, Vent: %.2fm/s, Dir: %d°, P: %.0fhPa, Main: %s, Desc: %s, Icon: %s - ID: %d"
+      , formatHeure(forecast->dt[ii])
+      , forecast->temp[ii] 
+      , forecast->humidity[ii]
+      , forecast->wind_speed[ii] 
+      , forecast->wind_deg[ii]
+      , forecast->pressure[ii]
+      , forecast->main[ii].c_str() 
+      , forecast->description[ii].c_str()
+      , forecast->icon[ii].c_str() 
+      , forecast->id[ii]);
   }
+
+  lever = formatHeure(forecast->sunrise);
+  coucher = formatHeure(forecast->sunset);
+  tempExt = forecast->temp[0];
+  icone = (forecast->icon[0]);
+  ID = (forecast->id[0]);
 
   esp_task_wdt_reset();
-
 }
 
 /***************************************************************************************
 **                         Requete OpenWeather
 **
 ***************************************************************************************/
-void requestMeteo2() {
-  const String urlWeather = "https://api.openweathermap.org/data/2.5/weather?lat=" + ow_latitude + "&lon=" + ow_longitude +"&units=" + ow_units + "&lang=" + ow_language + "&appid=" + ow_api_key;
+void reqMeteo2() {
+  const String urlCourante = "https://api.openweathermap.org/data/2.5/weather?lat=" + ow_latitude + "&lon=" + ow_longitude +"&units=metric&lang=fr&appid=" + ow_api_key;
 
-  log_println("[Meteo2] - GET " +urlWeather);
+  debugI("[Meteo2] - GET %s", urlCourante.c_str());
 
   HTTPClient http;
-  http.begin(urlWeather); //HTTP
-  http.useHTTP10(true);
   http.setConnectTimeout(3000);
   http.setTimeout(3000);
+  http.useHTTP10(true);
+  http.addHeader("accept", "application/json");
+  http.begin(urlCourante);
 
   int httpCode = http.GET();
-  if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
-    // Parse response
-    JsonDocument doc;
-    auto err = deserializeJson(doc, http.getStream());
-    if (err) {
-      log_println("deserializeJson failed");
-      http.end();
-      esp_task_wdt_reset();
-      return;
-    }
-
-    log_println("[Meteo2] - deseralized");
-
-    // Read values
-    myMeteo->lever      = strTime(doc["sys"]["sunrise"].as<uint32_t>());
-    myMeteo->coucher    = strTime(doc["sys"]["sunset"].as<uint32_t>());
-
-    myMeteo->temp       = doc["main"]["temp"].as<float>();
-    myMeteo->feels_like = doc["main"]["feels_like"].as<float>();
-    myMeteo->humidity   = doc["main"]["humidity"].as<uint8_t>();
-    myMeteo->pressure   = doc["main"]["pressure"].as<float>();
-
-    myMeteo->clouds     = doc["clouds"]["all"].as<uint8_t>();
-    myMeteo->visibility = doc["visibility"].as<uint32_t>();
-    myMeteo->rain       = doc["rain"]["1h"].as<float>();
-
-    myMeteo->wind_deg   = doc["wind"]["deg"].as<uint16_t>();
-    myMeteo->wind_gust  = doc["wind"]["gust"].as<float>();
-    myMeteo->wind_speed = doc["wind"]["speed"].as<float>();
-
-    myMeteo->icone      = doc["weather"][0]["icon"].as<String>();
-    myMeteo->ID         = doc["weather"][0]["id"].as<String>();
-    myMeteo->main       = doc["weather"][0]["main"].as<String>();
-    myMeteo->description = doc["weather"][0]["description"].as<String>();
-
-    myMeteo->dt         = strTime(doc["dt"].as<uint32_t>());
-    myMeteo->name       = doc["name"].as<String>();
-
-    lever   = myMeteo->lever;
-    coucher = myMeteo->coucher;
-    tempExt = myMeteo->temp;
-    icone   = myMeteo->icone;
-    ID      = myMeteo->ID;
-
-    String msg = "[Meteo2] - dt= " +myMeteo->dt 
-      +", lever= " +myMeteo->lever 
-      +", coucher= " +myMeteo->coucher
-      +", temp= " +String(myMeteo->temp, 1) +"°"
-      +", fells_like= " +String(myMeteo->feels_like, 1) +"°"
-      +", hum= " +String(myMeteo->humidity) +"%"
-      +", press= " +String(myMeteo->pressure, 0) +"hPa"
-      +", clouds= " +String(myMeteo->clouds)
-      +", visi= " +String(myMeteo->visibility)
-      +", rain= " +String(myMeteo->rain, 1)
-      +", vent= " +String(myMeteo->wind_speed, 1)
-      +", rafale= " +String(myMeteo->wind_gust, 1)
-      +", dir= " +String(myMeteo->wind_deg) +"°"
-      +", icone= " +myMeteo->icone
-      +", id= " +myMeteo->ID
-      +"; main= " +myMeteo->main
-      +", desc= " +myMeteo->description
-      +", name= " +myMeteo->name;
-
-    log_println(msg);
+  if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_MOVED_PERMANENTLY) {
+    debugE("[Meteo2] - Courante - Failed to GET - error: %s", http.errorToString(httpCode).c_str());
+    http.end();
+    return; 
   }
-  else {
-      log_println("[Meteo2] - Erreur code= " +httpCode);
+
+  // Parse response
+  JsonDocument doc;
+  String payload = http.getString();
+  debugD("[Meteo2] - payload : %s", payload.c_str());
+  auto err = deserializeJson(doc, payload);
+  //auto err = deserializeJson(doc, http.getStream());
+  if (err) {
+    debugE("[Meteo2] - Courante - deserializeJson failed");
+    http.end();
+    esp_task_wdt_reset();
+    return;
   }
+
+  debugD("[Meteo2] - AAA0 - myMeteo adrs: %p", &myMeteo);
+
+
+  debugD("[Meteo2] - AAA1");
+  // Read values
+  time_t val = doc["dt"].as<long>();
+  debugD("[Meteo2] - AAA1-1a");
+  String str = formatHeure(val);
+  debugD("[Meteo2] - AAA1-1b - str= %s", str.c_str());
+
+  debugD("[Meteo2] - AAA1-1c - old dt= %s", myMeteo.dt.c_str());
+
+  myMeteo.dt = str;
+  debugD("[Meteo2] - AAA1-1d");
+
+
+  myMeteo.dt         = formatHeure(doc["dt"].as<long>());
+  debugD("[Meteo2] - AAA1-1e");
+  myMeteo.lever      = formatHeure(doc["sys"]["sunrise"].as<long>());
+  debugD("[Meteo2] - AAA1-2");
+  myMeteo.coucher    = formatHeure(doc["sys"]["sunset"].as<long>());
+
+  debugD("[Meteo2] - AAA2");
+  myMeteo.temp       = doc["main"]["temp"].as<float>();
+  myMeteo.feels_like = doc["main"]["feels_like"].as<float>();
+  myMeteo.temp_min   = doc["main"]["temp_min"].as<float>();
+  myMeteo.temp_max   = doc["main"]["temp_max"].as<float>();
+  myMeteo.pressure   = doc["main"]["pressure"].as<float>();
+  myMeteo.humidity   = doc["main"]["humidity"].as<uint>();
+
+  debugD("[Meteo2] - AAA3");
+  myMeteo.clouds     = doc["clouds"]["all"].as<uint>();
+  myMeteo.visibility = doc["visibility"].as<float>() /1000.;
+  myMeteo.rain       = (doc["rain"] && doc["rain"]["1h"]) ? doc["rain"]["1h"].as<float>() : 0.;
+  myMeteo.snow       = (doc["snow"] && doc["snow"]["1h"]) ? doc["snow"]["1h"].as<float>() : 0.;
+
+  debugD("[Meteo2] - AAA4");
+  myMeteo.wind_speed = doc["wind"]["speed"].as<float>();
+  myMeteo.wind_gust  = (doc["wind"]["gust"]) ? doc["wind"]["gust"].as<float>() : 0.;
+  myMeteo.wind_deg   = doc["wind"]["deg"].as<uint>();
+
+  debugD("[Meteo2] - AAA5");
+  myMeteo.icon       = doc["weather"][0]["icon"].as<String>();
+  myMeteo.ID         = doc["weather"][0]["id"].as<String>();
+  myMeteo.wmain       = doc["weather"][0]["main"].as<String>();
+  myMeteo.description = doc["weather"][0]["description"].as<String>();
+
+  debugD("[Meteo2] - AAA6");
+  myMeteo.cityName   = doc["name"].as<String>();
+
+  debugD("[Meteo2] - AAA7");
+  lever   = myMeteo.lever;
+  coucher = myMeteo.coucher;
+  tempExt = myMeteo.temp;
+  icone   = myMeteo.icon;
+  ID      = myMeteo.ID;
+
+  debugD("[Meteo2] - AAA8");
+
+  debugD("[Meteo2] -     dt= %s >> T= %.1f°, Tres= %.1f°, Tmin= %.1f°, Tmax= %.1f°, H= %d%%, P= %.0fhPa, Clouds= %d%%\
+, Visi= %.1fkm, Pluie= %.1fmm, Neige= %.1fmm, proba: -, Vent= %.1fm/s, Rafale= %.1fm/s, Dir= %d°, icone= %s, id= %s; main= %s, desc= %s, name= %s, lever= %s, coucher= %s"
+    , myMeteo.dt.c_str() 
+    , myMeteo.temp
+    , myMeteo.feels_like
+    , myMeteo.temp_min
+    , myMeteo.temp_max
+    , myMeteo.humidity
+    , myMeteo.pressure
+    , myMeteo.clouds
+    , myMeteo.visibility
+    , myMeteo.rain
+    , myMeteo.snow
+    , myMeteo.wind_speed
+    , myMeteo.wind_gust
+    , myMeteo.wind_deg
+    , myMeteo.icon.c_str()
+    , myMeteo.ID.c_str()
+    , myMeteo.wmain.c_str()
+    , myMeteo.description.c_str()
+    , myMeteo.cityName.c_str() 
+    , myMeteo.lever.c_str() 
+    , myMeteo.coucher.c_str()
+  );
 
   http.end();
   esp_task_wdt_reset();
+
+  reqtMeteoPrevi();
 
   return;
 }
@@ -1845,91 +1904,107 @@ void requestMeteo2() {
 **                         Requete OpenWeather
 **
 ***************************************************************************************/
-void requestMeteo3() {
-  String urlWeather = "https://api.openweathermap.org/data/2.5/forecast?cnt=1&lat=" + ow_latitude + "&lon=" + ow_longitude +"&units=" + ow_units + "&lang=" + ow_language + "&appid=" + ow_api_key;
+void reqtMeteoPrevi() {
+  String urlPrevi = "https://api.openweathermap.org/data/2.5/forecast?cnt=1&lat=" + ow_latitude 
+    + "&lon=" + ow_longitude 
+    +"&units=metric&lang=fr&appid=" + ow_api_key;
 
-  log_println("[Meteo3] - GET " +urlWeather);
+  debugI("[MeteoPrevi] - GET %s", urlPrevi.c_str());
 
   HTTPClient http;
-  http.begin(urlWeather); //HTTP
-  http.useHTTP10(true);
   http.setConnectTimeout(3000);
   http.setTimeout(3000);
+  http.useHTTP10(true);
+  http.addHeader("accept", "application/json");
+  http.begin(urlPrevi);
 
   int httpCode = http.GET();
-  if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
-    // Parse response
-    JsonDocument doc;
-    auto err = deserializeJson(doc, http.getStream());
-    if (err) {
-      log_println("deserializeJson failed");
-      http.end();
-      esp_task_wdt_reset();
-      return;
-    }
-
-    log_println("[Meteo3] - deseralized");
-
-    // Read values
-    myMeteo->lever      = strTime(doc["city"]["sunrise"].as<uint32_t>());
-    myMeteo->coucher    = strTime(doc["city"]["sunset"].as<uint32_t>());
-
-    myMeteo->temp       = doc["list"][0]["main"]["temp"].as<float>();
-    myMeteo->feels_like = doc["list"][0]["main"]["feels_like"].as<float>();
-    myMeteo->humidity   = doc["list"][0]["main"]["humidity"].as<uint8_t>();
-    myMeteo->pressure   = doc["list"][0]["main"]["pressure"].as<float>();
-
-    myMeteo->clouds     = doc["list"][0]["clouds"]["all"].as<int>();
-    myMeteo->visibility = doc["list"][0]["visibility"].as<uint32_t>();
-    myMeteo->rain       = doc["list"][0]["rain"]["1h"].as<float>();
-
-    myMeteo->wind_deg   = doc["list"][0]["wind"]["deg"].as<uint16_t>();
-    myMeteo->wind_gust  = doc["list"][0]["wind"]["gust"].as<float>();
-    myMeteo->wind_speed = doc["list"][0]["wind"]["speed"].as<float>();
-
-    myMeteo->icone      = doc["list"][0]["weather"][0]["icon"].as<String>();
-    myMeteo->ID         = doc["list"][0]["weather"][0]["id"].as<String>();
-    myMeteo->main       = doc["list"][0]["weather"][0]["main"].as<String>();
-    myMeteo->description = doc["list"][0]["weather"][0]["description"].as<String>();
-
-    myMeteo->dt         = strTime(doc["list"][0]["dt"].as<uint32_t>());
-    myMeteo->name       = doc["city"]["name"].as<String>();
-
-    lever   = myMeteo->lever;
-    coucher = myMeteo->coucher;
-    tempExt = myMeteo->temp;
-    icone   = myMeteo->icone;
-    ID      = myMeteo->ID;
-  
-    String msg = "[Meteo3] - dt= " +myMeteo->dt 
-      +", lever= " +myMeteo->lever 
-      +", coucher= " +myMeteo->coucher
-      +", temp= " +String(myMeteo->temp, 1) +"°"
-      +", fells_like= " +String(myMeteo->feels_like, 1) +"°"
-      +", hum= " +String(myMeteo->humidity) +"%"
-      +", press= " +String(myMeteo->pressure, 0) +"hPa"
-      +", clouds= " +String(myMeteo->clouds)
-      +", visi= " +String(myMeteo->visibility)
-      +", rain= " +String(myMeteo->rain, 1)
-      +", vent= " +String(myMeteo->wind_speed, 1)
-      +", rafale= " +String(myMeteo->wind_gust, 1)
-      +", dir= " +String(myMeteo->wind_deg) +"°"
-      +", icone= " +myMeteo->icone
-      +", id= " +myMeteo->ID
-      +"; main= " +myMeteo->main
-      +", desc= " +myMeteo->description
-      +", name= " +myMeteo->name;
-
-    log_println(msg);
+  if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_MOVED_PERMANENTLY) {
+    debugE("[MeteoPrevi] - Failed to GET - error: %s", http.errorToString(httpCode).c_str()); 
+    http.end();
+    return;
   }
-  else {
-      log_println("[Meteo3] - Erreur code= " +httpCode);
+
+  // Parse response
+  JsonDocument doc;
+  String payload = http.getString();
+  debugD("[MeteoPrevi] - payload : %s", payload.c_str());
+  auto err = deserializeJson(doc, payload);
+  //auto err = deserializeJson(doc, http.getStream());
+  if (err) {
+    debugE("[MeteoPrevi] - deserializeJson failed");
+    http.end();
+    esp_task_wdt_reset();
+    return;
+  }
+
+  int nb = doc["cnt"].as<int>();
+  if (nb > 8) nb= 8;
+
+  JsonArray previs = doc["list"];
+  for (int ii=0 ; ii< nb; ii++) {
+    JsonObject prev = previs[ii];
+    
+    // Read values
+    myMeteo.previ[ii].dt         = formatHeure(prev["dt"].as<long>());
+
+    myMeteo.previ[ii].temp       = prev["main"]["temp"].as<float>();
+    myMeteo.previ[ii].feels_like = prev["main"]["feels_like"].as<float>();
+    myMeteo.previ[ii].temp_min   = prev["main"]["temp_min"].as<float>();
+    myMeteo.previ[ii].temp_max   = prev["main"]["temp_max"].as<float>();
+
+    myMeteo.previ[ii].humidity   = prev["main"]["humidity"].as<uint>();
+    myMeteo.previ[ii].pressure   = prev["main"]["pressure"].as<float>();
+
+    myMeteo.previ[ii].clouds     = prev["clouds"]["all"].as<int>();
+    myMeteo.previ[ii].visibility = prev["visibility"].as<float>() /1000.;
+
+    // La pluie n'est pas toujour presente, et peut avoir 2 parametres
+    if      ((prev["rain"]) && (prev["rain"]["1h"])) myMeteo.previ[ii].rain = prev["rain"]["1h"].as<float>();
+    else if ((prev["rain"]) && (prev["rain"]["3h"])) myMeteo.previ[ii].rain = prev["rain"]["3h"].as<float>();
+    else  myMeteo.previ[ii].rain = 0.;
+
+    // La pluie n'est pas toujour presente, et peut avoir 2 parametres
+    if      ((prev["snow"]) && (prev["snow"]["1h"])) myMeteo.previ[ii].snow = prev["snow"]["1h"].as<float>();
+    else if ((prev["snow"]) && (prev["snow"]["3h"])) myMeteo.previ[ii].snow = prev["snow"]["3h"].as<float>();
+    else  myMeteo.previ[ii].snow = 0.;
+
+    myMeteo.previ[ii].prob       = (prev["pop"]) ? (uint)(100.* prev["pop"].as<float>()) : 0;
+
+    myMeteo.previ[ii].wind_deg   = prev["wind"]["deg"].as<uint>();
+    myMeteo.previ[ii].wind_gust  = (prev["wind"]["gust"]) ? prev["wind"]["gust"].as<float>() : 0.;
+    myMeteo.previ[ii].wind_speed = prev["wind"]["speed"].as<float>();
+
+    myMeteo.previ[ii].icon       = prev["weather"][0]["icon"].as<String>();
+    myMeteo.previ[ii].ID         = prev["weather"][0]["id"].as<String>();
+    myMeteo.previ[ii].main       = prev["weather"][0]["main"].as<String>();
+    myMeteo.previ[ii].description = prev["weather"][0]["description"].as<String>();
+     
+    debugD("[MeteoPrevi] - dt= %s >> T= %.1f°, Tres= %.1f°, Tmin= %.1f°, Tmax= %1.f°, H= %d%%, P= %.0fhPa, Clouds= %d%%\
+, Visi= %.1fkm, Pluie= %.1fmm, Neige= %.1fmm, Proba= %d, Vent= %.1fm/s, Rafale= %.1fm/s, Dir= %d°, icone= %s, id= %s; main= %s, desc= %s"
+      , myMeteo.previ[ii].dt.c_str() 
+      , myMeteo.previ[ii].temp
+      , myMeteo.previ[ii].feels_like
+      , myMeteo.previ[ii].temp_min
+      , myMeteo.previ[ii].temp_max    
+      , myMeteo.previ[ii].humidity
+      , myMeteo.previ[ii].pressure
+      , myMeteo.previ[ii].clouds
+      , myMeteo.previ[ii].visibility
+      , myMeteo.previ[ii].rain
+      , myMeteo.previ[ii].snow
+      , myMeteo.previ[ii].prob
+      , myMeteo.previ[ii].wind_speed
+      , myMeteo.previ[ii].wind_gust
+      , myMeteo.previ[ii].wind_deg
+      , myMeteo.previ[ii].icon.c_str()
+      , myMeteo.previ[ii].ID.c_str()
+      , myMeteo.previ[ii].main.c_str()
+      , myMeteo.previ[ii].description.c_str()  );
   }
 
   http.end();
   esp_task_wdt_reset();
-
-  return;
 }
 
 /***************************************************************************************
@@ -1937,12 +2012,13 @@ void requestMeteo3() {
 **
 ***************************************************************************************/
 void reqMeteoSolaire (ulong ms) {
-  static ulong nextSolar = 0UL;
+  static ulong next = 0UL;
+  static ulong lastSolar = 0UL;
 
-  if ((ms < nextSolar) || (WiFi.status() != WL_CONNECTED))
+  if ((ms < next) || (WiFi.status() != WL_CONNECTED))
     return; 
 
-  nextSolar = ms + UPDATE_METEO_INTERVAL;
+  next = ms + UPDATE_METEO_SOLAIRE_INTERVAL;
 
   // Cf API doc : https://doc.forecast.solar/api
   //String horizon = "horizon=0,0,0,0,0,0,10,20,20,20,20,20";
@@ -1957,65 +2033,88 @@ void reqMeteoSolaire (ulong ms) {
     + "?damping=" + String(damping, 2)
     + "&no_sun=1";
 
-  log_println("[MeteoSolaire] - GET " +url);
+  debugI("[MeteoSolaire] - GET %s", url.c_str());
 
   forecast_size = 0;
 
   HTTPClient http;
-  http.begin(url); //HTTP
-  http.useHTTP10(true);
   http.setConnectTimeout(3000);
   http.setTimeout(3000);
+  //http.useHTTP10(true);
   http.addHeader("accept", "application/json");
-  http.addHeader("Content-Type", "application/json");
+  //http.addHeader("Content-Type", "application/json");
+  http.addHeader("User-Agent", "Companion MSunPV ESP32");
+
+  http.begin(url);
 
   int httpCode = http.GET();
-  if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
-    // Parse response
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, http.getStream());
-    //ReadLoggingStream loggingStream(http.getStream(), Serial);
-    //DeserializationError error = deserializeJson(doc, loggingStream);
-    if (error) {
-      log_println("[MeteoSolaire] - deserializeJson() failed: " + String(error.c_str()));
-      http.end();  // Ferme la connexion
-      return;
-    }
+  if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_MOVED_PERMANENTLY) {
+    debugE("[MeteoSolaire] - Failed to GET - code: %d, error: %s", httpCode, http.errorToString(httpCode).c_str()); 
+    http.end();
+    return;
+  }
 
-    log_println("[MeteoSolaire] - deseralized");
+  // Parse response
+  JsonDocument doc;
+  String payload = http.getString();
+  debugD("[MeteoSolaire] - payload : %s", payload.c_str());
+  auto err = deserializeJson(doc, payload);
+  if (err) {
+    debugE("[MeteoSolaire] - deserializeJson failed");
+    http.end();  // Ferme la connexion
+    return;
+  }
 
-    JsonObject watts = doc["result"]["watts"];
-    forecast_size = watts.size();
-    int ii = 0;
+  JsonObject watts = doc["result"]["watts"];
+  debugD("[MeteoSolaire] - watts size= %d", watts.size());
+  if (watts.size() > 48) {
+    debugE("[MeteoSolaire] - trop de données reçues");
+    return;
+  }
+  forecast_size = watts.size();
+  int ii = 0;
+  for (JsonPair item : watts) {
+    //debugD ("Item: key= %s, value= %d", item.key().c_str(), item.value().as<int>());
+    struct tm tm = {0};
+    strptime(item.key().c_str(), "%Y-%m-%d %H:%M:%S", &tm);
+    forecast_times[ii] = mktime(&tm);
+    forecast_watts[ii] = item.value();
+    ii++;
+  }
 
-    for (JsonPair item : watts) {
-      //log_println ("Item: key= " + String(item.key().c_str()) +", value= " + String(item.value().as<int>()));
-      struct tm tm = {0};
-      strptime(item.key().c_str(), "%Y-%m-%d %H:%M:%S", &tm);
-      forecast_times[ii] = mktime(&tm);
-      forecast_watts[ii] = item.value();
-      ii++;
-    }
+  JsonObject wattshours = doc["result"]["watt_hours_period"];
+  debugD("[MeteoSolaire] - wattshours size= %d", wattshours.size());
+  if (wattshours.size() > 48) {
+    debugE("[MeteoSolaire] - trop de données reçues");
+    return;
+  }
+  ii = 0;
+  for (JsonPair item : wattshours) {
+    forecast_wattshours[ii] = item.value();
+    ii++;
+  }
 
-    JsonObject wattshours = doc["result"]["watt_hours_period"];
-    ii = 0;
-    for (JsonPair item : wattshours) {
-      forecast_wattshours[ii] = item.value();
-      ii++;
-    }
+  JsonObject whday = doc["result"]["watt_hours_day"];
+  debugD("[MeteoSolaire] - whday size= %d", whday.size());
+  if (whday.size() > 2) {
+    debugE("[MeteoSolaire] - trop de données reçues");
+    return;
+  }
+  ii = 0;
+  for (JsonPair item : whday) {
+    forecast_whday[ii] = item.value();
+    ii++;
+  }
 
-    JsonObject whday = doc["result"]["watt_hours_day"];
-    ii = 0;
-    for (JsonPair item : whday) {
-      forecast_whday[ii] = item.value();
-      ii++;
-    }
+  ratelimit_remaining = doc["message"]["ratelimit"]["remaining"];
+  debugD("[MeteoSolaire] - ratelimit_remaining= %d", ratelimit_remaining);
 
-    ratelimit_remaining = doc["message"]["ratelimit"]["remaining"];
-    log_println("[MeteoSolaire] - ratelimit_remaining= " +String(ratelimit_remaining));
-  } 
+  lastSolar = ms;
+  next = ms + UPDATE_METEO_SOLAIRE_INTERVAL;
+  debugI("[MeteoSolaire] - OK, now: %s, next: %s", formatHeure(ms), formatHeure(next));
 
   http.end();  // Ferme la connexion
+  esp_task_wdt_reset();
 }
 
 /***************************************************************************************
@@ -2054,12 +2153,20 @@ bool decodeXML(String dataStr) {
   String vals[16];  // 16 valeurs à récupérer pour les consos et températures
 
   //+++++++++++++++++++++++++++++
-  str = parseSubString(dataStr, "<inAns>", "</inAns>");
-  log_println("[Decode] - <inAns> : " +str);
+  // Les mesures ou sondes
+  str = parseSubString(dataStr, "<paramSys>", "</paramSys>");
+  debugD("[Decode] - <paramSys> : %s", str.c_str());
+  split(vals, 10, str, ';');
+  msunpv_time = vals[0];
+  msunpv_date = vals[1];
+  msunpv_enrgsd = (strcmp("On", vals[2].c_str()) == 0);
 
+  str = parseSubString(dataStr, "<inAns>", "</inAns>");
+  debugD("[Decode] - <inAns> %s: ", str.c_str());
+  str.replace(",", ".");
   split(vals, 16, str, ';');
   powreso = vals[0].toInt();                // Consommation (si positif), ou Injection (si négatif)
-  powpv = vals[1].toInt();                  // Panneaux PV
+  powpv = 0 - vals[1].toInt();              // Panneaux PV
   powpv = (powpv > residuel) ? powpv : 0;
   outbal = vals[2].toInt() / 4;             // Dimmer Cumulus (0 à 400%) ==> 0-100%
   outrad = vals[3].toInt() / 4;             // Dimmer Radiateur (0 à 400%) ==> 0-100%
@@ -2071,52 +2178,79 @@ bool decodeXML(String dataStr) {
   powbal = (outbal * pCaractBallon) /100;
   powbal = (powbal > residuel) ? powbal : 0;
 
-  log_println("[Decode] - <inAns> ==> powreso= " +String(powreso) + "w"
-      + ", powpv= " +String(powpv) + "w"
-      + ", outbal= " +String(outbal) + "%"
-      + ", outrad= " +String(outrad) + "%"
-      + ", voltres= " +String(voltres) + "V"
-      + ", tbal= " +String(tbal) + "°C"
-      + ", tsdb= " +String(tsdb) + "°C"
-      + ", tamb= " +String(tamb) + "°C" );
+  debugD("[Decode] - <inAns> ==> powreso= %dW, powpv= %dW, outbal= %d%, outrad= %d%, voltres= %dV, tbal= %.1f°C, tsdb= %.1f°C, tamb= %.1f°C"
+      , powreso
+      , powpv
+      , outbal
+      , outrad
+      , voltres
+      , tbal
+      , tsdb
+      , tamb );
 
-  /*
   //+++++++++++++++++++++++++++++
+  // Surveillance des sondes: 0 pas de dépassement, 1 dépassement maxi, 2 dépassement mini ou sonde déconnectée.
   str = parseSubString(dataStr, "<survMm>", "</survMm>");
-  log_println("[Decode] - <survMm> : " +str); 
+  debugD("[Decode] - <survMm> : %s", str.c_str()); 
   split(vals, 16, str, ';');
+  for(int ii=0; ii<16 ; ii++) {
+    msunpv_surv[ii] = vals[ii].toInt();
+  }
 
   //+++++++++++++++++++++++++++++
+  // Position des 8 commandes, en binaire sur 4 bits.
   str = parseSubString(dataStr, "<cmdPos>", "</cmdPos>");
-  log_println("[Decode] - <cmdPos> : " +str); 
+  debugD("[Decode] - <cmdPos> : %s", str.c_str()); 
   split(vals,  8, str, ';');
-  
+  for (int ii=0 ; ii<8 ; ii++) {
+    msunpv_cmd[ii] = vals[ii].toInt();
+  }
+
+  int val =  hexa2int(vals[0]);
+  cmdManuBal = ((val & 0x01) != 0);
+  cmdAutoBal = ((val & 0x02) != 0);
+  cmdManuRad = ((val & 0x04) != 0);
+  cmdAutoRad = ((val & 0x08) != 0);
+
+  val = hexa2int(vals[7]);
+  cmdInject = ((val & 0x01) != 0);
+  cmdZero = ((val & 0x02) != 0);
+  cmdMoyen = ((val & 0x04) != 0);
+  cmdFort = ((val & 0x08) != 0);
+
   //+++++++++++++++++++++++++++++
+  // Valeurs des 16 sorties de 0 à 100%.
   str = parseSubString(dataStr, "<outStat>", "</outStat>");
-  log_println("[Decode] - <outStat> : " +str); 
+  debugD("[Decode] - <outStat> : %s", str.c_str()); 
   split(vals, 16, str, ';');
-  */
+  for (int ii = 0 ; ii<16 ; ii++) {
+    msunpv_out[ii] = vals[ii].toInt();
+  }
 
   //+++++++++++++++++++++++++++++
+  // Valeurs des 8 compteurs en hexadécimal.
   str = parseSubString(dataStr, "<cptVals>", "</cptVals>");
-  log_println("[Decode] - <cptVals> : " +str); 
+  debugD("[Decode] - <cptVals> : %s", str.c_str()); 
   split(vals,  8, str, ';');
-  cumulConso = hexa2float(vals[0]) /10000.;       // Cumul Consomation en kwh
-  cumulInj   = hexa2float(vals[1]) /10000.;       // Cumul Injection en kwh
-  cumulPV_J  = hexa2float(vals[2]) /10000.;       // Cumul Panneaux
-  cumulPV_P  = hexa2float(vals[3]) /10000.;       // Cumul Ballon cumulus
+  cumulConso = hexa2float(vals[0]) /10000.;       // Consomation réso (import) journalièer en kWh
+  cumulInj   = hexa2float(vals[1]) /10000.;       // Injection réso (export) journalière en kWh
+  cumulPV_J  = hexa2float(vals[2]) /10000.;       // Production Panneaux journalère en kWh
+  cumulPV_P  = hexa2float(vals[3]) /10.;          // Production Panneaux totale en kWh
   
-  log_println("[Decode] - <cptVals> ==> cumulConso= " +String(cumulConso, 3) + "kwh"
-      + ", cumulInj= " +String(cumulInj, 3) + "kwh"
-      + ", cumulPV_J= " +String(cumulPV_J, 3) + "kwh"
-      + ", cumulPV_P= " +String(cumulPV_P, 3) + "kwh"); 
+  debugD("[Decode] - <cptVals> ==> cumulConso= %.3fkWh, cumulInj= %.3fkWh, cumulPV_J= %.3fkWh, cumulPV_P= %.3fkWh"
+    , cumulConso
+    , cumulInj
+    , cumulPV_J
+    , cumulPV_P ); 
 
-  /*
   //+++++++++++++++++++++++++++++
+  // Valeurs calculées en sortie des modules Chauffage. 
   str = parseSubString(dataStr, "<chOutVal>", "</chOutVal>");
-  log_println("[Decode] - <cmdPos> : " +str); 
-  split(vals, 4, str, ';');
-  */
+  debugD("[Decode] - <chOutVal> : %s", str.c_str()); 
+  split(vals, 8, str, ';');
+  for (int ii=0 ; ii<8 ; ii++) {
+    msunpv_chout[ii] = hexa2int(vals[ii]);
+  }
 
   return true;
 }
@@ -2125,22 +2259,27 @@ bool decodeXML(String dataStr) {
 **                         Réception des données MSunPV
 **
 ***************************************************************************************/
-bool requestMSunPV(ulong ms) {
-  static ulong nextMSunPVUpdate = 0UL;
+bool reqMSunPV(ulong ms) {
+  static ulong next = 0UL;
+  static ulong lastMsunPV = 0UL;
+
   bool isOk = false;
 
   if (WiFi.status() != WL_CONNECTED) {
+    /*
     // En cas de perte de WIFI > 10mn
-    if (ms > nextMSunPVUpdate + 600000)
+    if ((next !=0) && (ms > next + 600000)) {
       ESP.restart();
+    }
+    */
 
     return isOk;
   }
 
-  if (ms < nextMSunPVUpdate)
+  if (ms < next)
     return isOk;
 
-  nextMSunPVUpdate = ms + UPDATE_MSUNPV_INTERVAL;
+  next = ms + UPDATE_MSUNPV_INTERVAL;
 
   // Affichage indicateur de rafraichissement des données en haut à gauche : démarrage
   if ((page == PAGE_DEFAULT) && (!firstAff)) {
@@ -2148,35 +2287,36 @@ bool requestMSunPV(ulong ms) {
     sprite.pushSprite(0, 0);
   }
 
-  HTTPClient http;
   String url = "http://" + msunpv_server + "/status.xml"; 
-  log_println("[MSunPV] - GET " +url);
+  debugI("[MSunPV] - GET %s", url.c_str());
+
+  HTTPClient http;
   http.setConnectTimeout(3000);
   http.setTimeout(3000);
-  http.begin(url); //HTTP
+  http.begin(url);
 
   int httpCode = http.GET();
-  if(httpCode != HTTP_CODE_OK) {
-    log_println("[MSunPV] - Failed to GET "+url +" - error: " +http.errorToString(httpCode));
+  if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_MOVED_PERMANENTLY) {
+    debugE("[MSunPV] - Failed to GET - error: %s", http.errorToString(httpCode).c_str());
     http.end();
+    return isOk;
   }
-  else {
-    String data = http.getString();
-    //log_println("[MSunPV] - GET [Ok], data : ["  + data +"]");
-    http.end();
 
-    if(decodeXML(data)) {
-      isOk = true;
-      updateAff = true;
-      
-      // Indicateur de rafraichissement des données => statut terminé (il sera effacé lors du rafraichissement de l'écran)
-      if ((page == PAGE_DEFAULT) && (!firstAff)) {
-        sprite.fillSmoothCircle(8, 8, 4, TFT_GREENYELLOW);
-        sprite.pushSprite(0, 0);
-      }
+  String data = http.getString();
+  //debugD("[MSunPV] - GET [Ok], data : [%s]", data);
+  if (decodeXML(data)) {
+    isOk = true;
+    updateAff = true;
+    lastMsunPV = ms;                    // Dernière mise à jour éffective
+    
+    // Indicateur de rafraichissement des données => statut terminé (il sera effacé lors du rafraichissement de l'écran)
+    if ((page == PAGE_DEFAULT) && (!firstAff)) {
+      sprite.fillSmoothCircle(8, 8, 4, TFT_GREENYELLOW);
+      sprite.pushSprite(0, 0);
     }
-  } 
-
+  }
+  
+  http.end();
   esp_task_wdt_reset();
   return isOk;
 }
@@ -2185,63 +2325,174 @@ bool requestMSunPV(ulong ms) {
 **                         Réception des données Tempo
 **
 ***************************************************************************************/
-void requestTempo(ulong ms) {
-  static ulong nextTempo = 0UL;
+void reqTempo() {
+  static time_t next = 0L;
+  static time_t lastTempo = 0L;
+  static const String urlTempoJour   = "https://www.api-couleur-tempo.fr/api/jourTempo/today";
+  static const String urlTempoDemain = "https://www.api-couleur-tempo.fr/api/jourTempo/tomorrow";
 
-  if ((ms < nextTempo) || (WiFi.status() != WL_CONNECTED)) 
+  time_t utcTime = now();
+  if ((utcTime < next) || (WiFi.status() != WL_CONNECTED)) 
     return;
 
-  nextTempo = ms + UPDATE_METEO_INTERVAL;
+  next = utcTime + 30;             // En cas d'erreur
 
-  HTTPClient http;
-  const String urlTempoJour   = "https://www.api-couleur-tempo.fr/api/jourTempo/today";
-  const String urlTempoDemain = "https://www.api-couleur-tempo.fr/api/jourTempo/tomorrow";
   JsonDocument doc;
-
   codeTempoJ = codeTempoJ1 = 0;
 
+  HTTPClient http;
   http.setConnectTimeout(3000);
   http.setTimeout(3000);
   http.addHeader("accept", "application/json");
 
-  log_println("[Tempo] - GET " +urlTempoJour);
-  if (http.begin(urlTempoJour)) {
-    int httpCode = http.GET();
-    if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
-      DeserializationError err = deserializeJson(doc, http.getString());
-      if (err) {
-        log_println("[Tempo] - deserializeJson() failed: " + String(err.c_str()));
-        http.end();
-        return;
-      }
-
-      codeTempoJ = doc["codeJour"];
-      if ((codeTempoJ < 0) || codeTempoJ > 3) 
-        codeTempoJ = 0;
+  debugI("[Tempo] - GET %s", urlTempoJour.c_str());
+  http.begin(urlTempoJour);
+  int httpCode = http.GET();
+  if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_MOVED_PERMANENTLY) {
+    debugE("[Tempo] - TempoJour, Failed to GET - error: %s", http.errorToString(httpCode).c_str()); 
+    http.end();
+    return;
+  }
+  else {
+    DeserializationError err = deserializeJson(doc, http.getString());
+    if (err) {
+      debugE("[Tempo] - deserializeJson() failed: %p", err);
+      http.end();
+      return;
     }
 
-    http.end();
-  } 
-
-  log_println("[Tempo] - GET " +urlTempoDemain);
-  if (http.begin(urlTempoDemain)) {
-    int httpCode = http.GET();
-    if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
-      DeserializationError err = deserializeJson(doc, http.getString());
-      if (err) {
-        log_println("[Tempo] - deserializeJson() failed: " + String(err.c_str()));
-        http.end();
-        return;
-      }
-
-      codeTempoJ1 = doc["codeJour"];
-      if ((codeTempoJ1 < 0) || codeTempoJ1 > 3) 
-        codeTempoJ1 = 0;
-    } 
-
-    http.end();
+    codeTempoJ = doc["codeJour"];
+    if ((codeTempoJ < 0) || codeTempoJ > 3) 
+      codeTempoJ = 0;
   }
 
+  http.end();
+
+  //------------------------
+  debugI("[Tempo] - GET %s", urlTempoDemain.c_str());
+  http.begin(urlTempoDemain);
+  httpCode = http.GET();
+  if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_MOVED_PERMANENTLY) {
+    debugE("[Tempo] - TempoDemain, Failed to GET - error: %s", http.errorToString(httpCode).c_str()); 
+    http.end();
+    return;
+  }
+
+  DeserializationError err = deserializeJson(doc, http.getString());
+  if (err) {
+    debugE("[Tempo] - deserializeJson() failed: %p", err);
+    http.end();
+    return;
+  }
+
+  codeTempoJ1 = doc["codeJour"];
+  if ((codeTempoJ1 < 0) || codeTempoJ1 > 3) 
+    codeTempoJ1 = 0;
+
+  lastTempo = utcTime;                             // Derniere mise à jour effective
+  updateTempo = true;
+
+  // Mise a jour à : 6h00, 11h00, 22h00 et 0h00
+  time_t lt = TIMEZONE.toLocal(utcTime, &tz1_Code);
+  tmElements_t tt;
+  breakTime(lt, tt);
+
+  if(tt.Hour < 6)       tt.Hour = 6;
+  else if(tt.Hour < 11) tt.Hour = 11;
+  else if(tt.Hour < 22) tt.Hour = 22;
+  else {
+    tt.Hour = 0;
+    tt.Day += 1;
+  }
+
+  tt.Minute = 0;
+  tt.Second = 10;
+  next = TIMEZONE.toUTC(makeTime(tt));
+
+  debugI("[Tempo] - OK now= %s (%ld), next= %s (%ld), delai= %lds", 
+    formatDateTime(utcTime).c_str(), utcTime, 
+    formatDateTime(next).c_str(), next, 
+    (next - utcTime));
+  
+  http.end();
+  esp_task_wdt_reset();
+}
+
+/***************************************************************************************
+**                         Réception des Tarifs Tempo
+**
+***************************************************************************************/
+void reqTempoTarifs() {
+  static time_t next = 0L;
+  static time_t lastTempoTarifs = 0L;
+
+  time_t utcTime = now();
+  if ((utcTime < next) || (WiFi.status() != WL_CONNECTED)) 
+    return;
+
+  next = utcTime + 30;             // En cas d'erreur
+
+  const String url = "https://www.myelectricaldata.fr/edf/tempo/price";
+  JsonDocument doc;
+
+  tarif_bleu_hp= tarif_bleu_hc= 0.;
+  tarif_blanc_hp= tarif_blanc_hc= 0.;
+  tarif_rouge_hp= tarif_rouge_hc= 0.;
+
+  HTTPClient http;
+  http.setConnectTimeout(3000);
+  http.setTimeout(3000);
+  http.addHeader("accept", "application/json");
+
+  debugI("[TempoTarifs] - GET %s", url.c_str());
+  http.begin(url);
+  int httpCode = http.GET();
+  if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_MOVED_PERMANENTLY) {
+    debugE("[TempoTarifs] - Failed to GET - error: %s", http.errorToString(httpCode).c_str());
+    http.end();
+    return; 
+  }
+
+  DeserializationError err = deserializeJson(doc, http.getString());
+  if (err) {
+    debugE("[TempoTarifs] - deserializeJson() failed: %p", err);
+    http.end();
+    return;
+  }
+
+  tarif_bleu_hp = doc["blue_hp"];
+  tarif_bleu_hc = doc["blue_hc"];
+  tarif_blanc_hp = doc["white_hp"];
+  tarif_blanc_hc = doc["white_hc"];
+  tarif_rouge_hp = doc["red_hp"];
+  tarif_rouge_hc = doc["red_hc"];
+
+  lastTempoTarifs = utcTime;                             // Derniere mise à jour effective
+  updateTempo = true;
+
+  // Mise a jour à : 6h00, 11h00, 22h00 et 0h00
+  time_t lt = TIMEZONE.toLocal(utcTime, &tz1_Code);
+  tmElements_t tt;
+  breakTime(lt, tt);
+
+  if(tt.Hour < 6)       tt.Hour = 6;
+  else if(tt.Hour < 11) tt.Hour = 11;
+  else if(tt.Hour < 22) tt.Hour = 22;
+  else {
+    tt.Hour = 0;
+    tt.Day += 1;
+  }
+
+  tt.Minute = 0;
+  tt.Second = 10;
+  next = TIMEZONE.toUTC(makeTime(tt));
+
+  debugI("[TempoTarifs] - OK now= %s (%ld), next= %s (%ld), delai= %lds", 
+    formatDateTime(utcTime).c_str(), utcTime, 
+    formatDateTime(next).c_str(), next, 
+    (next - utcTime));
+
+  http.end();
   esp_task_wdt_reset();
 }
 
@@ -2250,10 +2501,9 @@ void requestTempo(ulong ms) {
 **
 ***************************************************************************************/
 void readVbatt() {
-
   //vBatt = (float)(analogRead(4)) * 2. * 3300. / 4096.;         // Vbatt = 3.3V, 12bits
   vBatt = (float)(analogRead(4)) * 7.26 / 4096.;         // Vbatt = 3.3V, (12bits, Vref= 1,1V, analogInputDivider= 2) ==>  Val = (Read) * 1,1 * 2 /4096 
-  log_println("[vBat] - vBat = " +String(vBatt) +"V");
+  debugD("[vBat] - vBat = %.3fV", vBatt);
 }
 
 /***************************************************************************************
@@ -2288,12 +2538,18 @@ void split(String values[], int dimArray, String content, char separator) {
 **             Formatage Unix time en String "12:34" (heure locale)
 **
 ***************************************************************************************/
-String strTime(time_t unixTime) {
+String formatHeure(time_t unixTime) {
   time_t local_time = TIMEZONE.toLocal(unixTime, &tz1_Code);
+  char buffer[10];
+  sprintf(buffer, "%02d:%02d", hour(local_time), minute(local_time));
+  return String(buffer);
+}
 
-  String str = ((hour(local_time) < 10) ? ("0" +String(hour(local_time))) : (String(hour(local_time)))) +":";
-  str += ((minute(local_time) < 10) ? ("0" +String(minute(local_time))) : (String(minute(local_time))));
-  return str;
+String formatDateTime(time_t unixTime) {
+  time_t local_time = TIMEZONE.toLocal(unixTime, &tz1_Code);
+  char buffer[25];
+  sprintf(buffer, "%04d/%02d/%02d %02d:%02d:%02d", year(local_time), month(local_time), day(local_time), hour(local_time), minute(local_time), second(local_time));
+  return String(buffer);
 }
 
 /***************************************************************************************
@@ -2302,20 +2558,6 @@ String strTime(time_t unixTime) {
 ***************************************************************************************/
 float wh_to_kwh(float wh) {
   return wh / 1000.0;
-}
-
-/***************************************************************************************
-**     Routine de test pour afficher toutes les icones sur l'écran
-**               Décommenter la ligne 446 pour l'activer
-***************************************************************************************/
-void test() {
-  powpv = 0;
-  powreso = 4500;
-  powbal = 90;
-  tbal = 55.0;
-  tempExt = 3.0;
-  withTBal = true;
-  withRad = true;
 }
 
 /***************************************************************************************
@@ -2415,15 +2657,12 @@ void handlePageDef() {
 **
 ***************************************************************************************/
 void log_print(String msg) {
-  // Log message on serial port if available
-  if (Serial)
-    Serial.print(msg);
+  Debug.print(msg);
 }
 
 void log_println(String msg) {
-  log_print(msg + "\n");
+  Debug.println(msg);
 }
-
 
 /***************************************************************************************
 **                      Check Wifi status
@@ -2441,7 +2680,7 @@ void check_status()
     {
     if (WiFi.status() != WL_CONNECTED)
     {
-      log_println("\nWiFi lost. Call connectMultiWiFi in loop");
+      debugE("WiFi lost. Call connectMultiWiFi in loop");
 //      connectMultiWiFi();
     }
 
@@ -2455,7 +2694,7 @@ void check_status()
 ***************************************************************************************/
 void apCallback(ESPAsync_WiFiManager* myWiFiManager) {
 
-  log_println("apCallback  <<<<<<<<<<<<<<");
+  debugD("[apCallback] - debut");
 
   WiFi_AP_IPConfig apIp;
   myWiFiManager->getAPStaticIPConfig(apIp);
@@ -2480,7 +2719,7 @@ void apCallback(ESPAsync_WiFiManager* myWiFiManager) {
 ***************************************************************************************/
 void saveConfigCallback()
 {
-  log_println("Should save config");
+  debugI("Should save config");
   shouldSaveConfig = true;
 }
 
@@ -2488,19 +2727,18 @@ void saveConfigCallback()
 **                              Initialisaton du Wifi
 ** 
 ***************************************************************************************/
-void init_wifi() {
+void initWifi() {
 
-  log_println("[Wifi] - Connect WIFI...");
+  debugI("[Wifi] - Connecting to WIFI...");
 
   btStop();  // Stop Bluetooth
   WiFi.mode(WIFI_MODE_STA);
 
   AsyncWebServer webServer(80);
   AsyncDNSServer dnsServer;
-  ESPAsync_WiFiManager ESPAsync_wifiManager(&webServer, &dnsServer, "Companion-NG");
-
-  //reset settings - for testing
-  //ESPAsync_wifiManager.resetSettings();
+  ESPAsync_WiFiManager ESPAsync_wifiManager(&webServer, &dnsServer, "Companion-IO");
+  
+  //ESPAsync_wifiManager.resetSettings();               // Reset settings - for testing
   ESPAsync_wifiManager.setDebugOutput(false);
 
   ESPAsync_wifiManager.setConfigPortalTimeout(300);     // 300s timeout before AP mode stop
@@ -2525,9 +2763,6 @@ void init_wifi() {
   ESPAsync_WMParameter p_puisPV("puisPV", "Puis. Panneaux (W)", String(pCaractPV).c_str(), 6);
   ESPAsync_WMParameter p_puisBal("puisBal", "Puis. Ballon (W)", String(pCaractBallon).c_str(), 6);
   
-//  ESPAsync_WMParameter p_withTBal("withTBal", "Temp. Ballon",  (withTBal) ? "T" : "F", 1, (withTBal ? htmlCB_on : htmlCB), WFM_LABEL_AFTER);
-//  ESPAsync_WMParameter p_withVeille("withVeille", "Mode Veille", (withVeille) ? "T" : "F", 1, (withVeille ? htmlCB_on : htmlCB), WFM_LABEL_AFTER);
-//  ESPAsync_WMParameter p_withBatt("withBatt", "Alim par Batt", (withBatt) ? "T" : "F", 1, (withBatt ? htmlCB_on : htmlCB), WFM_LABEL_AFTER);
   ESPAsync_WMParameter p_withTBal("withTBal", "Temp. Ballon",  "T", 2, (withTBal ? htmlCB_on : htmlCB), WFM_LABEL_AFTER);
   ESPAsync_WMParameter p_withVeille("withVeille", "Mode Veille", "T", 2, (withVeille ? htmlCB_on : htmlCB), WFM_LABEL_AFTER);
   ESPAsync_WMParameter p_withBatt("withBatt", "Alim par Batt", "T", 2, (withBatt ? htmlCB_on : htmlCB), WFM_LABEL_AFTER);
@@ -2537,13 +2772,18 @@ void init_wifi() {
   ESPAsync_WMParameter p_ow_longitude("ow_longitude", "Longitude", ow_longitude.c_str(), 9);
   ESPAsync_WMParameter p_ow_apikey("ow_api_key", "Cl&eacute; API", ow_api_key.c_str(), 33);
 
-
   ESPAsync_WMParameter p_sepMqtt("<br/><p>HA MQTT Int&eacute;gration");
-//  ESPAsync_WMParameter p_withMqtt("withMqtt", "MQTT", (withMqtt) ? "T" : "F", 1, (withMqtt ? htmlCB_on : htmlCB), WFM_LABEL_AFTER);
   ESPAsync_WMParameter p_withMqtt("withMqtt", "MQTT", "T", 2, (withMqtt ? htmlCB_on : htmlCB), WFM_LABEL_AFTER);
   ESPAsync_WMParameter p_mqtt_server("mqtt_server", "MQTT (adrs. IP)", mqtt_server.c_str(), 16);
   ESPAsync_WMParameter p_mqtt_user("mqtt_user", "MQTT user", mqtt_user.c_str(), 16);
   ESPAsync_WMParameter p_mqtt_pwd("mqtt_pwd", "MQTT password", mqtt_pwd.c_str(), 16);
+
+  ESPAsync_WMParameter p_sepInflux("<br/><p>InfluxDB Int&eacute;gration");
+  ESPAsync_WMParameter p_withInflux("withInflux", "InfluxDB", "T", 2, (withInfluxDB ? htmlCB_on : htmlCB), WFM_LABEL_AFTER);
+  ESPAsync_WMParameter p_Influx_server("influx_server", "InfluxDB (adrs. IP)", influxDbServerUrl.c_str(), 50);
+  ESPAsync_WMParameter p_Influx_org("influx_org", "Org", influxDbOrg.c_str(), 20);
+  ESPAsync_WMParameter p_Influx_bucket("Influx_bucket", "Bucket", influxDbBucket.c_str(), 20);
+  ESPAsync_WMParameter p_Influx_token("Influx_token", "Token", influxDbToken.c_str(), 90);
 
 
   ESPAsync_wifiManager.addParameter(&p_msunpv_server);
@@ -2565,51 +2805,55 @@ void init_wifi() {
   ESPAsync_wifiManager.addParameter(&p_mqtt_user);
   ESPAsync_wifiManager.addParameter(&p_mqtt_pwd);
 
-  
+  ESPAsync_wifiManager.addParameter(&p_sepInflux);
+  ESPAsync_wifiManager.addParameter(&p_withInflux);
+  ESPAsync_wifiManager.addParameter(&p_Influx_server);
+  ESPAsync_wifiManager.addParameter(&p_Influx_org);
+  ESPAsync_wifiManager.addParameter(&p_Influx_bucket);
+  ESPAsync_wifiManager.addParameter(&p_Influx_token);
+
   String stored_SSID = ESPAsync_wifiManager.WiFi_SSID();
   String stored_Pass = ESPAsync_wifiManager.WiFi_Pass();
-  log_println("ESP Self-Stored: SSID = " + stored_SSID + ", Pass = " + stored_Pass);
+  debugD("ESP Self-Stored: SSID = %s, Pass = ", stored_SSID.c_str(), stored_Pass.c_str());
   
   if ((stored_SSID == "") || (msunpv_server == ""))
   {
-    log_println("No previous AP credentials and/or config");
+    debugI("No previous AP credentials and/or config");
     initialConfig = true;
   }
 /*  
   else {
-    log_println(" ==> Add this SSID/PW on wifiMulti");
+    debugD(" ==> Add this SSID/PW on wifiMulti");
     wifiMulti.addAP(stored_SSID.c_str(), stored_Pass.c_str());
     ESPAsync_wifiManager.setConfigPortalTimeout(120);
   }
 */
 
   if (initialConfig) { 
-    log_println("Start ConfigPortal AP mode");
     // Start AP mode       
-    if (!ESPAsync_wifiManager.startConfigPortal("Companion-NG", NULL)) {
-      log_println("Not connected to WiFi but continuing anyway.");
-    }
+    debugI("Start ConfigPortal AP mode");
+    ESPAsync_wifiManager.startConfigPortal("CompanionIO", NULL);
 
     if (WiFi.status() == WL_CONNECTED) {
-      log_println("WiFi connected... after ConfigPortal AP mode");
+      debugE("WiFi connected... after ConfigPortal AP mode");
     }
     else {
-      log_println("ERREUR - WiFi not connected after ConfigPortal AP mode");
+      debugE("ERREUR - WiFi not connected after ConfigPortal AP mode");
     }
   }
   else {
     // Auto connect with multiWifi
-    //log_println("ConnectMultiWiFi in setup");
+    //debugI("ConnectMultiWiFi in setup");
     //connectMultiWiFi();
 
-    log_println("Start autoconnect mode");
-    ESPAsync_wifiManager.autoConnect("Companion-NG");   // en cas d'echec, autoconnect lance egalement le ConfigPortal (mode AP)
+    debugI("Start autoconnect mode");
+    ESPAsync_wifiManager.autoConnect("CompanionIO");       // en cas d'echec, autoconnect lance egalement le ConfigPortal (mode AP)
 
     if (WiFi.status() == WL_CONNECTED) {
-      log_println("WiFi connected... after autoconnect");
+      debugI("WiFi connected... after autoconnect");
     }
     else {
-      log_println("ERREUR - WiFi not connected after autoconnect");
+      debugE("ERREUR - WiFi not connected after autoconnect");
     }
   }
 
@@ -2622,9 +2866,6 @@ void init_wifi() {
     pCaractPV = String(p_puisPV.getValue()).toInt();
     pCaractBallon = String(p_puisBal.getValue()).toInt();
 
-    log_println("p_withTBal value= " +String(p_withTBal.getValue()));
-    log_println("p_withVeille value= " +String(p_withVeille.getValue()));
-    log_println("p_withBatt value= " +String(p_withBatt.getValue()));
     withTBal = (String(p_withTBal.getValue()) == "T");
     withVeille = (String(p_withVeille.getValue()) == "T");
     withBatt = (String(p_withBatt.getValue()) == "T");
@@ -2633,68 +2874,72 @@ void init_wifi() {
     ow_longitude = String(p_ow_longitude.getValue());
     ow_api_key = String(p_ow_apikey.getValue());
 
-    log_println("p_withMqtt value= " +String(p_withMqtt.getValue()));
     withMqtt = (String(p_withMqtt.getValue()) == "T");
     mqtt_server = p_mqtt_server.getValue();
     mqtt_user = p_mqtt_user.getValue();
     mqtt_pwd = p_mqtt_pwd.getValue();
 
-    log_println("Sauvegarde de la config : server= " + String(msunpv_server) 
-      +", pCaractPV= " +String(pCaractPV)
-      +", pCaractBallon= " +String(pCaractBallon)
+    withInfluxDB = (String(p_withInflux.getValue()) == "T");
+    influxDbServerUrl = p_Influx_server.getValue();
+    influxDbOrg = p_Influx_org.getValue();
+    influxDbBucket = p_Influx_bucket.getValue();
+    influxDbToken = p_Influx_token.getValue();
 
-      +", withTBal= " +String(withTBal)
-      +", withVeille= " +String(withVeille)
-      +", withBatt= " +String(withBatt)
-
-      +", ow_latitude= " +ow_latitude
-      +", ow_longitude= " +ow_longitude
-      +", ow_api_key= " +ow_api_key 
-      
-      +", withMqtt= " +String(withMqtt) 
-      +", mqtt_server= " +mqtt_server 
-      +", mqtt_user= " +mqtt_user 
-      +", mqtt_pwd= " +mqtt_pwd 
-      );
+    debugD("Sauvegarde de la config : server= %s, pCaractPV= %d, pCaractBallon= %d, withTBal= %d, withVeille= %d, withBatt= %d\
+      , ow_latitude= %s, ow_longitude= %s, ow_api_key= %s, withMqtt= %d, mqtt_server= %s, mqtt_user= %s, mqtt_pwd= %s\
+      , withInfluxDB= %d, influxDbServerUrl= %s, influxDbOrg= %s, influxDbBucket= %s, influxDbToken= %s"
+      , msunpv_server 
+      , pCaractPV
+      , pCaractBallon
+      , withTBal
+      , withVeille
+      , withBatt
+      , ow_latitude.c_str()
+      , ow_longitude.c_str()
+      , ow_api_key.c_str() 
+      , withMqtt 
+      , mqtt_server.c_str() 
+      , mqtt_user.c_str() 
+      , mqtt_pwd.c_str()
+      , withInfluxDB 
+      , influxDbServerUrl.c_str() 
+      , influxDbOrg.c_str() 
+      , influxDbBucket.c_str() 
+      , influxDbToken.c_str() );
 
     saveFileFSConfigFile();
   }
 
   WiFi.mode(WIFI_MODE_STA);
 
-  log_println("WiFi connected...yeey 2");
+  debugI("WiFi connected...yeey 2");
 }
 
 /***************************************************************************************
 ** Liste le contenu de LittleFS
 ** 
 ***************************************************************************************/
-void listDir(const char * dirname, uint8_t levels){
-    log_println("Listing directory: " + String(dirname));
+void listDir(const char* dirname, uint8_t levels) {
+    debugD("Listing directory: %s", dirname);
 
-    File root = LittleFS.open(dirname);
-
-    if(!root){
-        log_println("- failed to open directory");
-        return;
+    File dir = LittleFS.open(dirname);
+    if (!dir || !dir.isDirectory()) {
+      debugE("Failed to open directory");
+      return;
     }
 
-    if(!root.isDirectory()){
-        log_println(" - not a directory");
-        return;
-    }
-
-    File file = root.openNextFile();
-    while(file){
-        if(file.isDirectory()){
-            log_println("  DIR : " +String(file.name()));
-            if(levels){
-                listDir(file.name(), levels -1);
-            }
-        } else {
-            log_println("  FILE: " +String(file.name()) +",  SIZE: " +String(file.size()));
+    File file = dir.openNextFile();
+    while (file) {
+      if (file.isDirectory()) {
+        debugD("  DIR : %s", file.name());
+        if (levels) {
+          listDir(file.name(), levels -1);
         }
-        file = root.openNextFile();
+      } 
+      else {
+        debugD("  FILE: %s,  size: %d", file.name(), file.size());
+      }
+      file = dir.openNextFile();
     }
 }
 
@@ -2702,40 +2947,41 @@ void listDir(const char * dirname, uint8_t levels){
 ** Read File from LittleFS 
 ** 
 ***************************************************************************************/
-String readFile(const char * path){
-  log_printf("Reading file: %s\r\n", path);
+String readFile(const char* filePath) {
+ debugD("Reading file: %s", filePath);
 
-  File file = LittleFS.open(path);
-  if(!file || file.isDirectory()){
-    log_println("- failed to open file for reading");
+  File file = LittleFS.open(filePath);
+  if (!file || file.isDirectory()) {
+    debugE("- failed to open file for reading");
     return String();
   }
   
-  String fileContent;
-  while(file.available()){
-    fileContent = file.readStringUntil('\n');
+  String buff;
+  while (file.available()) {
+    buff = file.readStringUntil('\n');
     break;     
   }
-  return fileContent;
+  return buff;
 }
 
 /***************************************************************************************
 ** Write file to LittleFS 
 ** 
 ***************************************************************************************/
-void writeFile(const char * path, const char * message){
-  log_printf("Writing file: %s\r\n", path);
+void writeFile (const char *filePath, const char *data) {
+  debugD("Writing file: %s", filePath);
 
-  File file = LittleFS.open(path, FILE_WRITE);
-  if(!file){
-    log_println("- failed to open file for writing");
+  File fs = LittleFS.open(filePath, FILE_WRITE);
+  if (!fs) {
+    debugE("- failed to open file for writing");
     return;
   }
-  if(file.print(message)) {
-    log_println("- file written");
-  } else {
-    log_println("- write failed");
+
+  if (!fs.print(data)) {
+    debugE("- write failed");
   }
+
+  fs.close();
 }
 
 /***************************************************************************************
@@ -2743,23 +2989,23 @@ void writeFile(const char * path, const char * message){
 ** 
 ***************************************************************************************/
 bool loadFileFSConfigFile() {
-  log_println("Reading config file - " + String(configFileName));
+  debugI("Reading config file - %s", configFileName);
 
   if (!LittleFS.begin()) {
-    log_println("ERROR - failed to mount FS");
+    debugE("ERROR - failed to mount FS");
     return false;
   }    
 
   File fs = LittleFS.open(configFileName, "r");
   if (!fs) {
-    log_println("ERROR - Failed to open config file for reading");
+    debugE("ERROR - Failed to open config file for reading");
     return false;
   }
 
   JsonDocument doc;
   auto err = deserializeJson(doc, fs.readString());
   if (err) {
-    log_println("deserializeJson failed");
+    debugE("deserializeJson failed");
     fs.close();
     return false;
   }
@@ -2781,25 +3027,34 @@ bool loadFileFSConfigFile() {
   if (doc["mqtt_user"]) mqtt_user= doc["mqtt_user"].as<String>();
   if (doc["mqtt_pwd"]) mqtt_pwd = doc["mqtt_pwd"].as<String>();
 
+  if (doc["withInfluxDB"]) withInfluxDB = doc["withInfluxDB"];
+  if (doc["influxDbServerUrl"]) influxDbServerUrl = doc["influxDbServerUrl"].as<String>();
+  if (doc["influxDbOrg"]) influxDbOrg = doc["influxDbOrg"].as<String>();
+  if (doc["influxDbBucket"]) influxDbBucket = doc["influxDbBucket"].as<String>();
+  if (doc["influxDbToken"]) influxDbToken = doc["influxDbToken"].as<String>();
+
   fs.close();
 
-  log_println("Lecture config OK : msunpv_server= " + msunpv_server 
-    +", pCaractPV= " +String(pCaractPV)
-    +", pCaractBallon= " +String(pCaractBallon)
-
-    +", withTBal= " +String(withTBal)
-    +", withVeille= " +String(withVeille)
-    +", withBatt= " +String(withBatt)
-
-    +", ow_latitude= " +String(ow_latitude)
-    +", ow_longitude= " +String(ow_longitude)
-    +", ow_api_key= " +String(ow_api_key) 
-
-    +", withMqtt= " +String(withMqtt) 
-    +", mqtt_server= " +mqtt_server 
-    +", mqtt_user= " +mqtt_user 
-    +", mqtt_pwd= " +mqtt_pwd 
-    );
+  debugD("Lecture config OK : msunpv_server= %s, pCaractPV= %d, pCaractBallon= %d, withTBal= %d, withVeille= %d, withBatt= %d\
+    , ow_latitude= %s, ow_longitude= %s, ow_api_key= %s, withMqtt= %d, mqtt_server= %s, mqtt_user= %s, mqtt_pwd= %s\
+    , withInfluxDB= %d, influxDbOrg= %s, influxDbBucket= %s, influxDbToken= %s"
+    , msunpv_server.c_str() 
+    , pCaractPV
+    , pCaractBallon
+    , withTBal
+    , withVeille
+    , withBatt
+    , ow_latitude.c_str()
+    , ow_longitude.c_str()
+    , ow_api_key.c_str() 
+    , withMqtt 
+    , mqtt_server.c_str() 
+    , mqtt_user.c_str() 
+    , mqtt_pwd.c_str() 
+    , withInfluxDB 
+    , influxDbOrg.c_str() 
+    , influxDbBucket.c_str() 
+    , influxDbToken.c_str() );
 
   return true;
 }
@@ -2809,11 +3064,11 @@ bool loadFileFSConfigFile() {
 ** 
 ***************************************************************************************/
 bool saveFileFSConfigFile() {
-  log_println("Saving config to file : " + String(configFileName));
+  debugI("Saving config to file : %s", configFileName);
 
   File fs = LittleFS.open(configFileName, "w");
   if (!fs) {
-    log_println("ERROR - Failed to open config file for writing");
+    debugE("ERROR - Failed to open config file for writing");
     return false;
   }
 
@@ -2835,38 +3090,44 @@ bool saveFileFSConfigFile() {
   json["mqtt_user"] = mqtt_user;
   json["mqtt_pwd"] = mqtt_pwd;
 
-  log_println("saveFileFSConfigFile - serialyze");
+  json["withInfluxDB"] = withInfluxDB;
+  json["influxDbServerUrl"] = influxDbServerUrl;
+  json["influxDbOrg"] = influxDbOrg;
+  json["influxDbBucket"] = influxDbBucket;
+  json["influxDbToken"] = influxDbToken;
 
+  debugD("saveFileFSConfigFile - serialyze");
   serializeJsonPretty(json, Serial);    // debug
 
   // Write data to file and close it
   serializeJson(json, fs);
-
+  debugD("saveFileFSConfigFile - serialyze OK");
   fs.close();
-  log_println("saveFileFSConfigFile - serialyze OK");
   
   return true;
 }
 
-const char* lumiFileName = "/lumi.json";
-
+/***************************************************************************************
+** Load Luminosité config file
+** 
+***************************************************************************************/
 void loadLumiParam() {
 
   if (!LittleFS.begin()) {
-    log_println("ERROR - failed to mount FS");
+    debugE("ERROR - failed to mount FS");
     return;
   }
 
-  File fs = LittleFS.open(lumiFileName, "r");
+  File fs = LittleFS.open(lumiConfigFileName, "r");
   if (!fs) {
-    log_println("ERROR - Failed to open lumi.json file for reading");
+    debugE("ERROR - Failed to open lumi.json file for reading");
     return;
   }
 
   JsonDocument doc;
   auto err = deserializeJson(doc, fs.readString());
   if (err) {
-    log_println("deserializeJson failed");
+    debugE("deserializeJson failed");
   }
   else {
     if (doc["lumi"]) backligthLevel = doc["lumi"].as<int>();
@@ -2875,10 +3136,14 @@ void loadLumiParam() {
   fs.close();
 }
 
+/***************************************************************************************
+** Save Luminosité config file
+** 
+***************************************************************************************/
 void saveLumiParam() {
-  File fs = LittleFS.open(lumiFileName, "w");
+  File fs = LittleFS.open(lumiConfigFileName, "w");
   if (!fs) {
-    log_println("ERROR - Failed to open lumi.json file for writing");
+    debugE("ERROR - Failed to open lumi.json file for writing");
     return;
   }
 
