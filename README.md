@@ -5,8 +5,8 @@ Afficheur déporté pour le routeur solaire **MSunPV** de **Ard-Tek**.
 ![Home Assistant](https://img.shields.io/badge/home%20assistant-%2341BDF5.svg?style=for-the-badge&logo=home-assistant&logoColor=white) ![InfluxDB](https://img.shields.io/badge/InfluxDB-22ADF6?style=for-the-badge&logo=InfluxDB&logoColor=white)
 
 
-![Screenshot](img/ecr_princ.jpg){ width=50% }![Screenshot](img/ecr_meteo_solair.jpg){ width=50% }
-![Screenshot](img/ecr_tempo.jpg){ width=50% }![Screenshot](img/ecr_lumi.jpg){ width=50% }
+<img src="img/ecr_princ.jpg" width="50%"><img src="img/ecr_meteo_solair.jpg" width="50%">
+<img src="img/ecr_tempo.jpg" width="50%"><img src="img/ecr_lumi.jpg" width="50%">
 
 **CompanionIO** est un écran déporté qui permet de suivre : 
 - la production des panneaux solaires, 
@@ -58,28 +58,37 @@ L'affichage de la météo nécéssite une clef API OpenWeatherMap.org gratuite. 
 ## Configuration Wifi et parametrage
 
 Le mode de configuration s'activé au démarage si : 
-- le reseau Wifi configurer n'est pas joignable, 
-- ou si deux resets sont effectués à moins de 10s d'intervale.
-  
-L'écran de l'afficheur, indique alors le nom du Wifi **Companion-IO** et l'adresse http://192.168.4.1 à laquelle vous devez vous connecter avec un smartphone, une tablette, ou un PC.
+- l'afficheur n'est pas configuré
+- ou si le reseau Wifi configuré n'est pas joignable, 
+- ou si deux resets sont effectués à moins de 15s d'intervale.
 
-![Screenshot](img/config_menu_1.jpg){ width=40% }
-![Screenshot](img/config_1a.jpg){ width=40% }
+**CompanionIO** active alors un point d'acces Wifi temporaire en mode AP et passe en mode configuration. Un ecran sur fond bleu est alors affiché avec les information nécessaires à la connection :
+- point d'acces Wifi : **Companion-IO**
+- url de configuration : http://192.168.4.1
 
-Renseigner en suite le nom de votre WiFi et son mot de passe, ainsi que les autre parametres de configuration propre au Companion (adresse du routeur MSunPV, puissance des paneaux solaire et du cumulus, presence ou non d'une sonde de temperature du cumulus, longitude et latitude de votre maison pour les infos météo, et clé d'API OpenWeather.map).
+Connectez vous à ce point d'accès, à l'aide d'un smartphone, d'une tablette, ou d'un PC, puis dirigez-vous en suite avec un navigateur vers l'url de configuration.
 
-Apres validation des parametres, le CompanionIO effectue un reset et tente de se connecter au WiFi configuré.
+<img src="img/config_menu_1.jpg" width="40%">
 
-![Screenshot](img/ecr_splash.jpg){ width=50% }
-
-Si la connexion au WiFi est réussie, l'écran de démarrage affiche l'adresse IP du CompanionIO pendant quelques secondes. Celui si peut alors être joint à cette adresse depuis votre réseau local, ou avec l'url http://companion.local
-
-
-Si **CompanionIO** n'est pas configuré, ou après un double reset à moins de 15s d'intervale, l'afficheur active un point d'acces Wifi AP nommé **Companion-IO** et passe en mode configuration. 
-Un ecran sur fond bleu est alors affiché avec les information nécessaires à la connection.
-Connectez vous à ce point d'accès temporaire, à l'aide d'un smartphone, une tablette, ou un PC.
-Dirigez-vous en suite avec un navigateur web vers : http://192.168.4.1. 
 Le menu **Configuration** permet la saisie des identifiants de votre Wifi, ainsi que les autres parametres de l'afficheur **Companion IO**.
+
+
+<img src="img/config_1a.jpg" width="40%">
+
+Renseignez le nom de votre WiFi et son mot de passe, ainsi que les autres parametres de configuration necessaires au **CompanionIO** (adresse du routeur MSunPV, puissance des paneaux solaire et du cumulus, présence d'une sonde de temperature du cumulus, longitude et latitude de votre installation pour les infos météo, et clé d'API OpenWeather.map).
+
+Apres validation des parametres, le **CompanionIO** effectue un reset et tente de se connecter au WiFi configuré.
+
+<img src="img/ecr_splash.jpg" width="50%"> 
+
+Si la connexion au WiFi est réussie, l'écran de démarrage affiche l'adresse IP du **CompanionIO** attribuée par votre box pendant quelques secondes. 
+
+Celui-ci peut maintenant être joint à cette adresse depuis votre réseau local, ou avec l'url http://companion.local
+
+Pour plus de simplicité. Pencez à associer une adresse IP fixe au **CompanionIO**, via l'interface d'administration de votre box.
+
+
+
 
 
 ---
@@ -94,8 +103,7 @@ Cette version permer l'affichage de :
 * L'heure et la date locale (synchronisée sur Internet)
 * L'heure du lever et du coucher de soleil
 
-
-![Screenshot](img/affiche.jpeg){ width=50% } 
+<img src="img/affiche.jpeg" width="50%"> 
 
 Le rafraichissement des données photovoltaiques se fait toutes les 15 secondes. La météo est quand à elle actualisée toutes les 15 minutes.
 
@@ -113,7 +121,7 @@ En cas de problème, le bouton reset situé sur le haut du boitier permet de rel
 
 **CompanionIO** peut transmettre périodiquement les mesures du routeur vers une instance **InfluxDB** pour mémorisation, et permettre une analyse graphique en temps réel ou à postérieri.
 
-![Screenshot](img/influxdb.png){ width=1000% }
+<img src="img/influxdb.png" width="100%"> 
 
 La transmission des messures routeur vers **InfluxDB** est activable dans l'écran de configuration du WIFI et des autes paramètres.
 
@@ -123,7 +131,7 @@ La transmission des messures routeur vers **InfluxDB** est activable dans l'écr
 
 Cette solution bien que toujours opérationnelle, et maintenant surpassée par l'intégration native [MSunPVIntegration](https://github.com/pvergezac/MSunPVIntegration), disponible dans **Home Assistant** avec **HACS**.
 
-![Screenshot](img/config_3a.jpg){ width=40% }
+<img src="img/config_3a.jpg" width="40%"> 
 
 La transmission des messures du routeur via **MQTT** est activable dans l'écran de configuration du WIFI et des autes paramètres.
 
@@ -140,7 +148,7 @@ La transmission des messures du routeur via **MQTT** est activable dans l'écran
 
 ---
 ## MSunPV
-![Screenshot](img/SAM_0251_640.JPG)
+<img src="img/SAM_0251_640.JPG" width="50%"> 
 
 Le routeur **MSunPV** de **Ard-Tek** est un routeur solaire permettant d'utiliser l'éxèdent de production des panneaux solaires pour recharger le ballon d'eau chaude, au lieu de l'injecter sur le réseau électrique.
 Il fonctionne à la maniere d'un variateur de puissance (gradateur), en adaptant la puissance du ballon d'eau chaude en fonction du surplus de production solaire vis à vis de la consomation du domicile. Il utilise pour cela un ou plusieur capteurs de courant placés sur les cables du tableau électrique. 
@@ -150,10 +158,10 @@ Tous les détails sont sur le site de [Ard-Tek](https://ard-tek.com).
 ---
 ## Crédits
 
-L'afficheur est basé sur les travaux du [**Companion MSunPV** de @jjhontebeyrie](https://github.com/JJHontebeyrie/Companion), mais également sur ceux du [**Companion pour MaxPV** de @djeje12](https://github.com/djeje12/Companion_for_MaxPV).
+L'afficheur est basé sur les travaux du **[Companion MSunPV de @jjhontebeyrie](https://github.com/JJHontebeyrie/Companion)**, mais également sur ceux du **[Companion pour MaxPV de @djeje12](https://github.com/djeje12/Companion_for_MaxPV)**.
 
 Le code a par contre été très largement ré-écrit et adpaté.
 
-De nombreux échanges sur le développement et l'utilisation de ces routeurs sont présent sur le [Forum Photovoltaique](https://forum-photovoltaique.fr/viewtopic.php?t=62730), mais également sur le [forum de Ard-Tek](https://ard-tek.com/index.php/forum/vos-installations-mspv/686-faire-un-afficheur-deporte).
+De nombreux échanges sur le développement et l'utilisation de ces afficheurs sont présent sur le [Forum Photovoltaique](https://forum-photovoltaique.fr/viewtopic.php?t=62730), mais également sur le [forum de Ard-Tek](https://ard-tek.com/index.php/forum/vos-installations-mspv/686-faire-un-afficheur-deporte).
 
 
