@@ -161,7 +161,7 @@ ulong uptime = 0;                             // Heure de demarrage (reset)
 #define PAGE_LUMI     4
 #define PAGE_METEO    5
 #define PAGE_METEO2   6
-#define PAGE_LAST     6
+#define PAGE_LAST     4
 #define DUREE_AFF     (5* 60 * 1000)          // Durée affichage page, avant retour à la page par défaut
 
 int page = PAGE_DEFAULT;                      // Page courante affichée
@@ -2627,6 +2627,8 @@ void doubleClick() {
 void handlePage() {
   if (!veille_on) {
     page++;
+    if (page > PAGE_LAST)
+      page = PAGE_DEFAULT;
 
     veille_deb = millis() + TEMPS_VEILLE;
     tempsAffPage = millis() + DUREE_AFF;

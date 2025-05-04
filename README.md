@@ -80,15 +80,16 @@ Renseignez le nom de votre WiFi et son mot de passe, ainsi que les autres parame
 Apres validation des parametres, le **CompanionIO** effectue un reset et tente de se connecter au WiFi configuré.
 
 <img src="img/ecr_splash.jpg" width="50%"> 
+<p>
 
 Si la connexion au WiFi est réussie, l'écran de démarrage affiche l'adresse IP du **CompanionIO** attribuée par votre box pendant quelques secondes. 
 
 Celui-ci peut maintenant être joint à cette adresse depuis votre réseau local, ou avec l'url http://companion.local
 
+<img src="img/affiche.jpeg" width="50%"> 
+<p>
+
 Pour plus de simplicité. Pencez à associer une adresse IP fixe au **CompanionIO**, via l'interface d'administration de votre box.
-
-
-
 
 
 ---
@@ -103,21 +104,29 @@ Cette version permer l'affichage de :
 * L'heure et la date locale (synchronisée sur Internet)
 * L'heure du lever et du coucher de soleil
 
-<img src="img/affiche.jpeg" width="50%"> 
 
 Le rafraichissement des données photovoltaiques se fait toutes les 15 secondes. La météo est quand à elle actualisée toutes les 15 minutes.
 
 Le bouton du T-Diplay situé en bas (si vous avez branché le module par la gauche), permet de sélectionner en séquence l'écran affiché : 
-  Affichage principal, Météo, Prévision de production, Tempo, Cumuls, Réglage luninosité.
+  - Affichage principal, 
+  - Prévision de production (courbes heure/heure J et J+1), 
+  - Tempo, 
+  - Compteurs de cumuls, 
+  - Réglage luninosité.
+  - Météo (en developpement)
 
-Le bouton du T-Diplay situé en haut permet d'allumer ou éteindre l'écran. Celui-ci s'éteindra également au bout de 2mn si vous avez choisi le mode veille lors de la configuration. Sur l'écran de réglage de la luminosité de l'écran, un simple clic sur ce bouton augmente la luminosité, alors qu'un double clic la diminue.
+Un double clic sur ce bouton revient à l'écran principal. 
 
-En cas de problème, le bouton reset situé sur le haut du boitier permet de relancer le programme. Un double reset en moins de 15s permet d'activer le mode de configuration (Wifi AP).
+Le bouton du T-Diplay situé en haut permet d'allumer ou éteindre l'écran. Celui-ci s'éteindra également au bout de 5 mn si vous avez choisi le mode veille lors de la configuration. 
+
+Sur l'écran de réglage de luminosité écran, un clic simple sur ce bouton augmente la luminosité, alors qu'un double clic la diminue.
+
+En cas de problème, le bouton reset situé sur le dessus du boitier permet de relancer le programme. Un double reset en moins de 15s permet d'activer le mode de configuration (Wifi AP).
 
 
 ## Intégration avec InfluDB
 
-**InfluxDB** est un système de gestion de base de données orientée séries temporelles, employées notamment pour stocker et analyser des données horodatées de capteurs. Il est courament utilisé pour le monitoring de processus, la surveillance d'infracstructure ou de performance.
+**InfluxDB** est un système de gestion de base de données orientée séries temporelles, employées notamment pour stocker et analyser des données horodatées de capteurs. **InfluxDB** est courament utilisé pour le monitoring de processus, la surveillance d'infracstructure, ou de performance.
 
 **CompanionIO** peut transmettre périodiquement les mesures du routeur vers une instance **InfluxDB** pour mémorisation, et permettre une analyse graphique en temps réel ou à postérieri.
 
@@ -127,30 +136,34 @@ La transmission des messures routeur vers **InfluxDB** est activable dans l'écr
 
 ## Intégration avec Home Assistant
 
-**CompanionIO** peut servir d'interface entre **MSunPV** et **Home Assistant**, en transmettant périodiquement les données du routeur sous d'evenement **MQTT**.
+**CompanionIO** peut servir d'interface entre **MSunPV** et **Home Assistant**, en transmettant périodiquement les données du routeur sous forme d'evenement **MQTT**.
 
-Cette solution bien que toujours opérationnelle, et maintenant surpassée par l'intégration native [MSunPVIntegration](https://github.com/pvergezac/MSunPVIntegration), disponible dans **Home Assistant** avec **HACS**.
+Cette solution bien que toujours opérationnelle, et maintenant surpassée par l'intégration native [MSunPVIntegration](https://github.com/pvergezac/MSunPVIntegration) disponible dans **Home Assistant** avec **HACS**.
 
 <img src="img/config_3a.jpg" width="40%"> 
 
 La transmission des messures du routeur via **MQTT** est activable dans l'écran de configuration du WIFI et des autes paramètres.
 
-
+---
 ## Utilisation avec l'IDE PlateformIO
 
-* Installer PlatformIO (voir : https://platformio.org/platformio-ide) 
+* Installer **PlatformIO** (voir : https://platformio.org/platformio-ide) 
   * Download and install official Microsoft's Visual Studio Code
-  * Open VSCode Extension Manager
-  * Search for official PlatformIO IDE extension
-  * Install PlatformIO IDE
+  * Open **VSCode** Extension Manager
+  * Search for official **PlatformIO IDE** extension
+  * Install **PlatformIO IDE**
 * Cloner le dépots du projet, dans le répertoire de travail
-  ou télécharger le zip des sources du projet, et le déziper dans le répertoire de travail 
+  ou télécharger le zip des sources du projet, et le déziper dans le répertoire de travail.
+<p>
+    Lors du premier upload du logiciel sur le module **T-Display-S3**, il et nécessaire d'uploader les fichiers de donnée du repertoire **'data'**. Pour cela utiliser le commande **Upload Filesystem Image** de **PlateformIO**. Par la suite la commande **Upload** suffira à télécharger le code, et n'effacera pas la sauvegarde des paramatres de configuration (contrairement à la première).
 
 ---
 ## MSunPV
 <img src="img/SAM_0251_640.JPG" width="50%"> 
+<p>
 
 Le routeur **MSunPV** de **Ard-Tek** est un routeur solaire permettant d'utiliser l'éxèdent de production des panneaux solaires pour recharger le ballon d'eau chaude, au lieu de l'injecter sur le réseau électrique.
+
 Il fonctionne à la maniere d'un variateur de puissance (gradateur), en adaptant la puissance du ballon d'eau chaude en fonction du surplus de production solaire vis à vis de la consomation du domicile. Il utilise pour cela un ou plusieur capteurs de courant placés sur les cables du tableau électrique. 
 
 Tous les détails sont sur le site de [Ard-Tek](https://ard-tek.com).
@@ -160,7 +173,7 @@ Tous les détails sont sur le site de [Ard-Tek](https://ard-tek.com).
 
 L'afficheur est basé sur les travaux du **[Companion MSunPV de @jjhontebeyrie](https://github.com/JJHontebeyrie/Companion)**, mais également sur ceux du **[Companion pour MaxPV de @djeje12](https://github.com/djeje12/Companion_for_MaxPV)**.
 
-Le code a par contre été très largement ré-écrit et adpaté.
+Le code en a été très largement ré-écrit et adpaté.
 
 De nombreux échanges sur le développement et l'utilisation de ces afficheurs sont présent sur le [Forum Photovoltaique](https://forum-photovoltaique.fr/viewtopic.php?t=62730), mais également sur le [forum de Ard-Tek](https://ard-tek.com/index.php/forum/vos-installations-mspv/686-faire-un-afficheur-deporte).
 
