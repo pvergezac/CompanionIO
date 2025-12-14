@@ -72,39 +72,43 @@ Une importante réécriture du code a été réalisée, ainsi qu'un portage vers
 
 
 Pour cela : 
+- Télécharger le **firmware CompanionIO** depuis Github : [merged-firmware.bin](https://github.com/pvergezac/CompanionIO/raw/refs/heads/main/merged-firmware.bin)
 - Raccorder **LILYGO T-Display-S3** à votre PC, via un cable **USB** (alimentation + donnés).
-- Télécharger le firmware depuis Github : [merged-firmware.bin](https://github.com/pvergezac/CompanionIO/raw/refs/heads/main/merged-firmware.bin)
-- Rendez-vous avec **Google Chrome** sur : [Esp Tool](https://espressif.github.io/esptool-js/)
-- Mettre le module **LILYGO T-Display-S3** en mode 'Upload':
+- Rendez-vous avec **Google Chrome** ou **Microsoft Edge** sur : [Esp Tool](https://espressif.github.io/esptool-js/)
+- Mettre le module **LILYGO T-Display-S3** en mode **Upload**:
   - Maintenir le bouton 'Boot' pressé (bouton du haut, si prise usb vers la gauche)
   - Faire un reset (bouton sur le dessus)
   - Relacher le bouton 'Boot'
-- Dans la section Program 
-  - Sélectionner Baudrate sur 230400
+- Dans la section "Program" 
+  - Sélectionner "Baudrate" sur : 230400
   - Click sur le bouton **"Connect"**
   - Sélectionner le port série de raccordements du **LILYGO T-Display-S3**
   - Puis **"Connexion"**
-  - Flash address à : **0x0**, puis choisir le ficher **merged-firmware.bin** (téléchargé précédemment)
+  - mettre "Flash address" à : **0x0**
+  - puis choisir le ficher **"merged-firmware.bin"** (téléchargé précédemment)
 - Click sur **"Program"**
 
-> Après installation du firmware, le module **LILYGO T-Display-S3** va redémarrer.
-> Si ce n'est pas le cas, faire un reset.
+> **Le upload et l'installation du firmware ne dure que quelques secondes. Après installation du firmware, le module LILYGO T-Display-S3 va redémarrer.**
+> 
+> **Si ce n'est pas le cas, faire un reset.**
 
 ---
 ## Configuration Wifi et paramétrage
 
-> **L'affichage de la météo nécessite une clef API "OpenWeatherMap.org" gratuite.** 
+> **L'affichage de la météo nécessite une clef API "OpenWeatherMap.org" gratuite.**
+> 
+> **Vous devez donc vous la procurer pour pouvoir compléter la configuration de CompanionIO.** 
 > - **Aller sur : https://home.openweathermap.org/api_keys**
 >   - **Créez un compte**
 >   - **Créer une clé d'API (à utiliser lors de la configuration de CompanionIO)**
 
-Au démarrage, si le Wifi n'est pas configuré, ou si il n'est pas joignable, **CompanionIO** passe en mode configuration et active un point d'accès Wifi AP nommé **Companion-IO**.
+Au démarrage, si le Wifi n'est pas configuré, ou s'il n'est pas joignable, **CompanionIO** passe en mode configuration et active un point d'accès Wifi AP nommé **"Companion-IO"**.
 
-- Un écran sur fond bleu affiche alors, les informations nécessaires à la connexion :
-  - Point d'accès : **Companion-IO**
+- Un écran sur fond bleu affiche alors, les informations nécessaires à la connexion pour réaliser la configuration :
+  - Point d'accès : **"Companion-IO"**
   - Url de configuration : http://192.168.4.1
 
->**Le mode configuration peut également être activé en réalisant 2 reset en moins de 15 secondes.**
+>**Le mode configuration peut également être activé en réalisant 2 reset successifs en moins de 15 secondes.**
 
 - Avec Smartphone, une tablette ou un PC :
   - Connectez-vous au point d'accès Wifi : **"Companion-IO"**
@@ -116,33 +120,35 @@ Au démarrage, si le Wifi n'est pas configuré, ou si il n'est pas joignable, **
 
 <p align="center">  <img src="img/config_1a.jpg" width="40%"> </p>
 
-- Renseigner le nom de votre WiFi et son mot de passe
-- Ainsi que les autres paramètres de configuration :
-  - Adresse du routeur MSunPV
+- Renseigner les paramètres Wifi Renseigner
+  - Sélectionner votre Wifi, en haut dans la liste des Wifis détectés
+  - Renseigner son mot de passe
+- Renseigner les autres paramètres de configuration :
+  - Adresse IP du routeur MSunPV
   - Puissance des panneaux solaire et du cumulus
   - Présence d'une sonde de température du cumulus
+  - Mise en veille
   - Longitude et latitude de votre installation pour les infos météo
   - Clé d'API OpenWeather.map
 
-> Apres validation des paramètres, le **CompanionIO** effectue un reset et tente de se connecter au WiFi configuré.
+> Après validation des paramètres, **CompanionIO** effectue un reset et tente de se connecter au Wifi configuré.
 
 <p align="center">  <img src="img/ecr_splash.jpg" width="50%"> </p>
 
-> Si la connexion au WiFi réussie, l'écran de démarrage affiche quelques secondes :
+> Si la connexion au Wifi est réussie. L'écran de démarrage s'affiche quelques secondes, avec :
 > - La version du firmware
 > - L'adresse IP du **CompanionIO**
-
 
 > **CompanionIO** peut être joint à cette adresse IP (ou http://companion.local) depuis votre réseau local.
 
 <p align="center">  <img src="img/affiche.jpeg" width="50%"> </p>
 
-> **Vous pouvez associer une adresse IP fixe au CompanionIO, via l'interface d'administration de votre box, pour garantir quelle ne change pas.**
+> **Vous pouvez associer une adresse IP fixe au CompanionIO (via l'interface d'administration de votre box), pour garantir quelle ne change pas.**
 
 
 ---
 ---
-## Utilisation de l'afficheur
+## Utilisation de l'afficheur CompanionIO
 
 Cette version permet l'affichage de :
 * La production photovoltaïque instantanée
@@ -151,48 +157,52 @@ Cette version permet l'affichage de :
 * la quantité d'énergie exportée
 * Les informations météo locales
 * L'heure et la date locale (synchronisée sur Internet)
-* L'heure du lever et du coucher de soleil
+* L'heure de lever et de coucher du soleil
 
+>Le rafraichissement des données photovoltaïques se fait toutes les 15 secondes. La météo est quant à elle actualisée toutes les 15 minutes.
 
-Le rafraichissement des données photovoltaïques se fait toutes les 15 secondes. La météo est quant à elle actualisée toutes les 15 minutes.
-
-Le bouton du bas (si vous avez branché le module par la gauche), permet de sélectionner en séquence l'écran affiché : 
+Le **bouton du bas** (si prise Usb gauche), permet de sélectionner en séquence l'écran affiché : 
   - Affichage principal, 
   - Prévision de production (courbe heure par heure, J et J+1), 
-  - Tempo, 
+  - Couleur Jours Tempo, 
   - Compteurs de cumuls, 
   - Réglage luminosité.
-  - Météo (en développement)
+  - Météo détaillée (en développement)
 
-Un double clic sur ce bouton revient à l'écran principal. 
+Un **double clic** sur ce **bouton du bas** revient à l'écran principal. 
 
-Le bouton du haut permet d'allumer ou éteindre l'écran. Celui-ci s'éteindra également au bout de 5 mn si vous avez choisi le mode veille lors de la configuration. 
+Le **bouton du haut** permet d'allumer ou éteindre l'écran. Celui-ci s'éteindra également après 5 mn si le mode veille est validé lors de la configuration. 
 
-Sur l'écran de réglage de luminosité écran, un clic simple sur ce bouton augmente la luminosité, alors qu'un double clic la diminue.
+Sur l'écran de **réglage de luminosité**, un **clic simple** sur le **bouton du haut** augmente la luminosité, alors qu'un **double clic** la diminue.
 
-En cas de problème, le bouton reset situé sur le dessus du boitier permet de relancer le programme. Un double reset en moins de 15 s permet d'activer le mode de configuration (Wifi AP).
+>En cas de problème, le **bouton reset** situé sur le dessus du boitier permet de relancer le programme.
+
+>Un **double reset** en moins de 15 s permet d'activer le mode de configuration (Wifi AP).
 
 
 ## Intégration avec InfluDB
 
-**InfluxDB** est un système de gestion de base de données orientée séries temporelles, employées notamment pour stocker et analyser des données horodatées de capteurs. **InfluxDB** est couramment utilisé pour le monitoring de processus, la surveillance d'infrastructure, ou de performance.
+**InfluxDB** est un système de gestion de base de données orientée séries temporelles. Il est employé notamment pour stocker et analyser des données horodatées de capteurs.
+
+**InfluxDB** est couramment utilisé pour le monitoring de processus, la surveillance d'infrastructure, ou de performance.
 
 **CompanionIO** peut transmettre périodiquement les mesures du routeur vers une instance **InfluxDB** pour mémorisation, et permettre une analyse graphique en temps réel ou à postériori.
 
 <p align="center"> <img src="img/influxdb.png" width="100%"> </p>
 
-La transmission des mesures routeur vers **InfluxDB** est activable dans l'écran de configuration du WIFI et des autres paramètres.
+La transmission des mesures vers **InfluxDB** est activable dans l'écran de configuration du WIFI et des autres paramètres.
 
 ## Intégration avec Home Assistant
 
 **CompanionIO** peut servir d'interface entre **MSunPV** et **Home Assistant**, en transmettant périodiquement les données du routeur sous forme d'événement **MQTT**.
 
-Cette solution bien que toujours opérationnelle, et maintenant surpassée par l'intégration native [MSunPVIntegration](https://github.com/pvergezac/MSunPVIntegration) disponible dans **Home Assistant** avec **HACS**.
+> **Cette solution bien que toujours opérationnelle, et maintenant surpassée par l'intégration native [MSunPVIntegration](https://github.com/pvergezac/MSunPVIntegration) disponible dans HACS**.
 
 <p align="center"> <img src="img/config_3a.jpg" width="40%"> </p>
 
-La transmission des mesures du routeur via **MQTT** est activable dans l'écran de configuration du WIFI et des autres paramètres.
+> L'activation de la transmission des mesures du routeur via **MQTT** est réalisée dans l'écran de configuration du WIFI.
 
+---
 ---
 ## Utilisation avec l'IDE PlateformIO
 
@@ -218,7 +228,7 @@ Le routeur **MSunPV** de **Ard-Tek** est un routeur solaire permettant d'utilise
 
 - Il utilise pour cela un ou plusieurs capteurs de courant placés sur les câbles du tableau électrique.
 - Il peut également mesurer la température du ballon, si une sonde y est ajoutée.
-- Il remplace le commutateur jour/nuit pour bénéficier de l'ensoleillement et compléter la chauffe en horaire de nuit si nécessaire.
+- Il remplace le commutateur jour/nuit, pour bénéficier de l'ensoleillement et compléter éventuellement la chauffe en horaire de nuit si nécessaire.
 
 Tous les détails sont sur le site de [Ard-Tek](https://ard-tek.com).
 
