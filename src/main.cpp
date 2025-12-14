@@ -2,7 +2,7 @@
 
 const String TITRE = "MSunPV CompanionIO";
 const String TITRE_LONG = "CompanionIO (Nouvelle Génération)";
-const String Version = "1.01";
+const String Version = "1.0.2";
 
 //*************************************************
 //                @pzac                          **
@@ -65,6 +65,7 @@ WiFiMulti wifiMulti;
 #include <ESPAsyncWebServer.h>
 #include <HTTPClient.h>
 
+
 #include <ESPmDNS.h>                // Pour le mDNS
 #include "NTP_Time.h"               // Time Synchronisation
 #include <RemoteDebug.h>            // Debug via Wifi
@@ -76,6 +77,8 @@ WiFiMulti wifiMulti;
 #include <InfluxDbClient.h>         // InfluxDB
 #include <InfluxDbCloud.h>          // InfluxDB  pour le certificat
 #include <PubSubClient.h>           // gestion MQTT
+
+#include <ElegantOTA.h>
 
 // Additional functions
 #include "GfxUi.h"                  // Attached to this sketch
@@ -634,6 +637,9 @@ void loop() {
   Debug.handle();
   
   //+++++++++++++++++++++++++++++++
+  ElegantOTA.loop();
+
+  //+++++++++++++++++++++++++++++++
   // Gestion des boutons
   boutonBacklight.tick();
   boutonPage.tick();
@@ -1128,6 +1134,8 @@ void initWebServer() {
   });
 
   webserver.begin();
+
+  ElegantOTA.begin(&webserver);    // Start ElegantOTA
 }
 
 /***************************************************************************************

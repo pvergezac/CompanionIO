@@ -1,8 +1,19 @@
 # CompanionIO
 Afficheur déporté pour le routeur solaire **MSunPV** de **Ard-Tek**.
 
-![PlatformIO](https://img.shields.io/badge/PlatformIO-%23222.svg?style=for-the-badge&logo=platformio&logoColor=%23f5822a) ![Visual Studio Code](https://img.shields.io/badge/Visual%20Studio%20Code-0078d7.svg?style=for-the-badge&logo=visual-studio-code&logoColor=white) ![Espressif](https://img.shields.io/badge/espressif-E7352C.svg?style=for-the-badge&logo=espressif&logoColor=white) ![Arduino](https://img.shields.io/badge/-Arduino-00979D?style=for-the-badge&logo=Arduino&logoColor=white)
-![Home Assistant](https://img.shields.io/badge/home%20assistant-%2341BDF5.svg?style=for-the-badge&logo=home-assistant&logoColor=white) ![InfluxDB](https://img.shields.io/badge/InfluxDB-22ADF6?style=for-the-badge&logo=InfluxDB&logoColor=white)
+![GitHub Release](https://img.shields.io/github/v/release/pvergezac/Companionio)
+![GitHub top language](https://img.shields.io/github/languages/top/pvergezac/companionio)
+![GitHub Repo stars](https://img.shields.io/github/stars/pvergezac/companionio)
+[![Github All Releases](https://img.shields.io/github/downloads/pvergezac/companionio/total.svg)]()
+
+
+
+![PlatformIO](https://img.shields.io/badge/PlatformIO-%23222.svg?logo=platformio&logoColor=%23f5822a) 
+![Visual Studio Code](https://img.shields.io/badge/Visual-Studio-Code?logoColor=white)
+![Espressif](https://img.shields.io/badge/espressif-E7352C.svg?logo=espressif&logoColor=white) 
+![Arduino](https://img.shields.io/badge/-Arduino-00979D?logo=Arduino&logoColor=white)
+![Home Assistant](https://img.shields.io/badge/home%20assistant-%2341BDF5.svg?logo=home-assistant&logoColor=white) 
+![InfluxDB](https://img.shields.io/badge/InfluxDB-22ADF6?logo=InfluxDB&logoColor=white)
 
 
 <img src="img/ecr_princ.jpg" width="50%"><img src="img/ecr_meteo_solair.jpg" width="50%">
@@ -42,13 +53,35 @@ Elle inclue des fonctionnalités permettant :
 
 
 
-## Pré-requis
+## Installation
 
 **CompanionIO** est conçu pour être utilisé sur la carte de développement **LILYGO T-Display-S3**, qui est doté d'un afficheur LCD couleur (320x170), et du processeur **ESP32-S3**. 
 
 **LILYGO T-Display S3** 
 * info : https://lilygo.cc/products/t-display-s3. 
 * achat : https://s.click.aliexpress.com/e/_DBC5gbz
+
+>Si vous n'êtes pas familier des environnements de developpement, vous pouver utiliser l'outil en ligne [EspHome web](https://web.esphome.io/) pour uploader le firmware de CompanionIO sur votre **LILYGO T-Display-S3**.
+>
+>[EspHome web](https://web.esphome.io/) necessite l'utilisation des navigateurs **Google Chrome** ou **Microsoft Edge**. 
+
+
+
+- Raccorder votre **LILYGO T-Display-S3** à votre PC, avec l'aide d'un cable **USB** (permetant l'échange de donnés).
+- Télécherger le firmware de CompanionIO
+- Rendez vous avec **Google Chrome** sur : [EspHome web](https://web.esphome.io/)
+- Mettre le **LILYGO T-Display-S3** en mode 'Upload':
+  - Presser le bouton 'Boot' (bouton du haut, si prise usb vers la gauche)
+  - Appuyer sur le bouton reset (sur le dessus)
+  - Relacher le bouton 'Boot'
+- Appuyer sur le bouton 'Connect'
+- Sélectionner le port série de raccordement du **LILYGO T-Display-S3**
+- Click sur 'Install'
+- Choisir le ficher firmware téléchargé précedement
+- Click sur 'Install'
+
+
+Après installation du firmware, le module **LILYGO T-Display-S3** va redémarrer.
 
 Le développement est réalisé sur l'environnement de developpement (IDE) **PlatformIO** / **Visual Studio Code**.
 
@@ -175,6 +208,6 @@ L'afficheur est basé sur les travaux du **[Companion MSunPV de @jjhontebeyrie](
 
 Le code en a été très largement ré-écrit et adpaté.
 
-De nombreux échanges sur le développement et l'utilisation de ces afficheurs sont présent sur le [Forum Photovoltaique](https://forum-photovoltaique.fr/viewtopic.php?t=62730), mais également sur le [forum de Ard-Tek](https://ard-tek.com/index.php/forum/vos-installations-mspv/686-faire-un-afficheur-deporte).
+Il y a de nombreux échanges sur le développement et l'utilisation de ces afficheurs sur le [Forum Photovoltaique](https://forum-photovoltaique.fr/viewtopic.php?t=62730), mais également sur le [forum de Ard-Tek](https://ard-tek.com/index.php/forum/vos-installations-mspv/686-faire-un-afficheur-deporte).
 
 
