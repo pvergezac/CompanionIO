@@ -1,11 +1,10 @@
 # CompanionIO
-Afficheur déporté pour le routeur solaire **MSunPV** de **Ard-Tek**.
+
 
 ![GitHub Release](https://img.shields.io/github/v/release/pvergezac/Companionio)
 ![GitHub top language](https://img.shields.io/github/languages/top/pvergezac/companionio)
 ![GitHub Repo stars](https://img.shields.io/github/stars/pvergezac/companionio)
 [![Github All Releases](https://img.shields.io/github/downloads/pvergezac/companionio/total.svg)]()
-
 
 
 ![PlatformIO](https://img.shields.io/badge/PlatformIO-%23222.svg?logo=platformio&logoColor=%23f5822a) 
@@ -15,167 +14,184 @@ Afficheur déporté pour le routeur solaire **MSunPV** de **Ard-Tek**.
 ![Home Assistant](https://img.shields.io/badge/home%20assistant-%2341BDF5.svg?logo=home-assistant&logoColor=white) 
 ![InfluxDB](https://img.shields.io/badge/InfluxDB-22ADF6?logo=InfluxDB&logoColor=white)
 
-
-<img src="img/ecr_princ_2.jpg" width="50%"><img src="img/ecr_meteo_solair.jpg" width="50%">
-<img src="img/ecr_tempo.jpg" width="50%"><img src="img/ecr_lumi.jpg" width="50%">
-
-**CompanionIO** est un écran déporté qui permet de suivre : 
+**CompanionIO** est un écran déporté pour le **routeur solaire MSunPV** de [**Ard-Tek**](https://ard-tek.com/), permettant de suivre : 
 - la production des panneaux solaires, 
-- la consommation de la maison, 
-- le routage du surplus de production par le routeur **MSunPV**.
+- la consommation de la maison sur le réseau, 
+- le routage du surplus de production vers le ballon d'eau chaude.
 
-Ainsi que divers informations complementaires très utiles à l'optimisation de l'autoconsomation, dont :
-- L'estimation de production previsionnel en fonction de la météo
-- La couleur TEMPO 
+Ainsi que diverses informations, utiles à l'optimisation de l'autoconsommation :
+- Météo locale courante
+- Estimation prévisionnelle de la production solaire (J et J+1)
+- Couleur du jour TEMPO (J et J+1)
 
+<p align="center">
+<img src="img/ecr_princ_2.jpg" width="50%">
+<img src="img/ecr_meteo_solair.jpg" width="50%"><img src="img/ecr_tempo.jpg" width="50%">
+<img src="img/ecr_compteurs.jpg" width="50%"><img src="img/ecr_lumi.jpg" width="50%"> </p>
 
-**CompanionIO** poursuit la voie initiée par **JJHontebeyrie** et **Djeje12** avec leurs versions de Companion pour **MSunPV** et **MaxPV**.
+Ce projet poursuit la voie initiée par **JJHontebeyrie** et **Djeje12** avec leurs versions d'afficheurs pour **MSunPV** et **MaxPV**.
 
-Cette version est une réécriture presque complète du code, et un portage vers l'environnement de développement **VisualC** / **PlatformIO**. 
+Une importante réécriture du code a été réalisée, ainsi qu'un portage vers l'environnement de développement **VS Code / PlatformIO**. 
 
+---
+## Fonctionnalités
 
-Elle inclue des fonctionnalités permettant : 
- * l'affichage des mesures du routeur **MSunPV**
-   * production des panneaux solaires
-   * consommation/injection sur le réseaux électrique
-   * taux de routage vers le ballon d'eau chaude
-   * température du ballon (si sonde présente)
- * l'affichage du code couleur **Tempo** à J et J+1
- * la méteo et température via **OpenWeatherMap**
- * les prévisions de production solaire à J et J+1 via **Forecast.solar** 
- * la mise en veille et le contrôle de luminosité de l'écran
- * le niveau du signal WiFi
- * la consultation d'une page web locale affichant les mesures du routeur 
- * l'accès local via l'url : http://companion.local (mDNS)
- * l'enregistrement des mesures par **InfluxDB**
- * l'intégration dans **Home Assistant** par **MQTT** et auto configuration (discovery)
- * la configuration en ligne du WiFi, et de tous les paramètres (via AsyncWifiManager)
+**CompanionIO** inclue des fonctionnalités : 
+ * Affichage des mesures du routeur **MSunPV**
+   * Production des panneaux solaires
+   * Consommation/injection sur le réseaux électrique
+   * Taux de routage vers le ballon d'eau chaude
+   * Température du ballon (si sonde présente)
+ * Code couleur du jour **Tempo** (J et J+1)
+ * Météo et température courante, via **OpenWeatherMap**
+ * Prévisions de production solaire (J et J+1), via **Forecast.solar** 
+ * Mise en veille et contrôle de luminosité de affichage
+ * Niveau du signal WiFi
+ * Accès web locale aux mesures du routeur
+   * http://companion.local (mDNS)
+ * Intégration avec **InfluxDB** (option), historisation des mesures
+ * Intégration avec **Home Assistant** (option), via **MQTT** et auto discovery
+> * **Installation en ligne** du firmware, **sans environnement de développement** 
+>* **Mise à jour en ligne** du firmware par OTG
+>* **Configuration en ligne** du WiFi, et des paramètres (via AsyncWifiManager)
 
+---
+## Matériel
 
+**CompanionIO** est conçu pour la carte de développement **LILYGO T-Display-S3**, qui comporte un **afficheur OLED 320x170**, et un processeur **ESP32-S3**
 
+>**Description sur : [Lilygo.cc](https://lilygo.cc/products/t-display-s3)**
+  - Achat sur : [Aliexpress.com](https://s.click.aliexpress.com/e/_DBC5gbz)
+  - Ou sur : [Amazon.fr](https://amazon.fr) 
+      - Chercher : "lilygo t-display-s3"
+
+---
 ## Installation
 
-**CompanionIO** est conçu pour être utilisé sur la carte de développement **LILYGO T-Display-S3**, qui est doté d'un afficheur LCD couleur (320x170), et du processeur **ESP32-S3**. 
-
-**LILYGO T-Display S3** 
-* info : https://lilygo.cc/products/t-display-s3. 
-* achat : https://s.click.aliexpress.com/e/_DBC5gbz
-
->Si vous n'êtes pas familier des environnements de developpement, vous pouver utiliser l'outil en ligne [EspHome web](https://web.esphome.io/) pour uploader le firmware de CompanionIO sur votre **LILYGO T-Display-S3**.
->
->[EspHome web](https://web.esphome.io/) necessite l'utilisation des navigateurs **Google Chrome** ou **Microsoft Edge**. 
+>**Si vous n'êtes pas familier des environnements de développement, vous pouvez installer le firmware de CompanionIO avec l'outil en ligne [Esp Tool](https://espressif.github.io/esptool-js/), depuis un navigateur Google Chrome ou Microsoft Edge**. 
 
 
-
-- Raccorder votre **LILYGO T-Display-S3** à votre PC, avec l'aide d'un cable **USB** (permetant l'échange de donnés).
-- Télécherger le firmware de CompanionIO
-- Rendez vous avec **Google Chrome** sur : [EspHome web](https://web.esphome.io/)
-- Mettre le **LILYGO T-Display-S3** en mode 'Upload':
-  - Presser le bouton 'Boot' (bouton du haut, si prise usb vers la gauche)
-  - Appuyer sur le bouton reset (sur le dessus)
+Pour cela : 
+- Raccorder **LILYGO T-Display-S3** à votre PC, via un cable **USB** (alimentation + donnés).
+- Télécharger le firmware depuis Github : [merged-firmware.bin](https://github.com/pvergezac/CompanionIO/raw/refs/heads/main/merged-firmware.bin)
+- Rendez-vous avec **Google Chrome** sur : [Esp Tool](https://espressif.github.io/esptool-js/)
+- Mettre le module **LILYGO T-Display-S3** en mode 'Upload':
+  - Maintenir le bouton 'Boot' pressé (bouton du haut, si prise usb vers la gauche)
+  - Faire un reset (bouton sur le dessus)
   - Relacher le bouton 'Boot'
-- Appuyer sur le bouton 'Connect'
-- Sélectionner le port série de raccordement du **LILYGO T-Display-S3**
-- Click sur 'Install'
-- Choisir le ficher firmware téléchargé précedement
-- Click sur 'Install'
+- Dans la section Program 
+  - Sélectionner Baudrate sur 230400
+  - Click sur le bouton **"Connect"**
+  - Sélectionner le port série de raccordements du **LILYGO T-Display-S3**
+  - Puis **"Connexion"**
+  - Flash address à : **0x0**, puis choisir le ficher **merged-firmware.bin** (téléchargé précédemment)
+- Click sur **"Program"**
+
+> Après installation du firmware, le module **LILYGO T-Display-S3** va redémarrer.
+> Si ce n'est pas le cas, faire un reset.
+
+---
+## Configuration Wifi et paramétrage
+
+> **L'affichage de la météo nécessite une clef API "OpenWeatherMap.org" gratuite.** 
+> - **Aller sur : https://home.openweathermap.org/api_keys**
+>   - **Créez un compte**
+>   - **Créer une clé d'API (à utiliser lors de la configuration de CompanionIO)**
+
+Au démarrage, si le Wifi n'est pas configuré, ou si il n'est pas joignable, **CompanionIO** passe en mode configuration et active un point d'accès Wifi AP nommé **Companion-IO**.
+
+- Un écran sur fond bleu affiche alors, les informations nécessaires à la connexion :
+  - Point d'accès : **Companion-IO**
+  - Url de configuration : http://192.168.4.1
+
+>**Le mode configuration peut également être activé en réalisant 2 reset en moins de 15 secondes.**
+
+- Avec Smartphone, une tablette ou un PC :
+  - Connectez-vous au point d'accès Wifi : **"Companion-IO"**
+  - Puis avec un navigateur, sur l'url de configuration : http://192.168.4.1
+
+<p align="center"> <img src="img/config_menu_1.jpg" width="40%" align="center"> </p>
+
+- Le menu **Configuration** permet la saisie des identifiants de votre Wifi, ainsi que les autres paramètres de l'afficheur **Companion IO**.
+
+<p align="center">  <img src="img/config_1a.jpg" width="40%"> </p>
+
+- Renseigner le nom de votre WiFi et son mot de passe
+- Ainsi que les autres paramètres de configuration :
+  - Adresse du routeur MSunPV
+  - Puissance des panneaux solaire et du cumulus
+  - Présence d'une sonde de température du cumulus
+  - Longitude et latitude de votre installation pour les infos météo
+  - Clé d'API OpenWeather.map
+
+> Apres validation des paramètres, le **CompanionIO** effectue un reset et tente de se connecter au WiFi configuré.
+
+<p align="center">  <img src="img/ecr_splash.jpg" width="50%"> </p>
+
+> Si la connexion au WiFi réussie, l'écran de démarrage affiche quelques secondes :
+> - La version du firmware
+> - L'adresse IP du **CompanionIO**
 
 
-Après installation du firmware, le module **LILYGO T-Display-S3** va redémarrer.
+> **CompanionIO** peut être joint à cette adresse IP (ou http://companion.local) depuis votre réseau local.
 
-Le développement est réalisé sur l'environnement de developpement (IDE) **PlatformIO** / **Visual Studio Code**.
+<p align="center">  <img src="img/affiche.jpeg" width="50%"> </p>
 
-L'affichage de la météo nécéssite une clef API OpenWeatherMap.org gratuite. Pour cela, créez un compte gratuit, puis ensuite créer une clé d'API (https://home.openweathermap.org/api_keys). Puis, utilisez cette clé lors de la configuration du **CompanionIO**.
-
-
-## Configuration Wifi et parametrage
-
-Le mode de configuration s'activé au démarage si : 
-- l'afficheur n'est pas configuré
-- ou si le reseau Wifi configuré n'est pas joignable, 
-- ou si deux resets sont effectués à moins de 15s d'intervale.
-
-**CompanionIO** active alors un point d'acces Wifi temporaire en mode AP et passe en mode configuration. Un ecran sur fond bleu est alors affiché avec les information nécessaires à la connection :
-- point d'acces Wifi : **Companion-IO**
-- url de configuration : http://192.168.4.1
-
-Connectez vous à ce point d'accès, à l'aide d'un smartphone, d'une tablette, ou d'un PC, puis dirigez-vous en suite avec un navigateur vers l'url de configuration.
-
-<img src="img/config_menu_1.jpg" width="40%">
-
-Le menu **Configuration** permet la saisie des identifiants de votre Wifi, ainsi que les autres parametres de l'afficheur **Companion IO**.
-
-
-<img src="img/config_1a.jpg" width="40%">
-
-Renseignez le nom de votre WiFi et son mot de passe, ainsi que les autres parametres de configuration necessaires au **CompanionIO** (adresse du routeur MSunPV, puissance des paneaux solaire et du cumulus, présence d'une sonde de temperature du cumulus, longitude et latitude de votre installation pour les infos météo, et clé d'API OpenWeather.map).
-
-Apres validation des parametres, le **CompanionIO** effectue un reset et tente de se connecter au WiFi configuré.
-
-<img src="img/ecr_splash.jpg" width="50%"> 
-<p>
-
-Si la connexion au WiFi est réussie, l'écran de démarrage affiche l'adresse IP du **CompanionIO** attribuée par votre box pendant quelques secondes. 
-
-Celui-ci peut maintenant être joint à cette adresse depuis votre réseau local, ou avec l'url http://companion.local
-
-<img src="img/affiche.jpeg" width="50%"> 
-<p>
-
-Pour plus de simplicité. Pencez à associer une adresse IP fixe au **CompanionIO**, via l'interface d'administration de votre box.
+> **Vous pouvez associer une adresse IP fixe au CompanionIO, via l'interface d'administration de votre box, pour garantir quelle ne change pas.**
 
 
 ---
+---
 ## Utilisation de l'afficheur
 
-Cette version permer l'affichage de :
-* La production photovoltaiques instantanée
+Cette version permet l'affichage de :
+* La production photovoltaïque instantanée
 * L'énergie routée vers le cumulus
-* La consommation electrique du domicile
+* La consommation électrique du domicile
 * la quantité d'énergie exportée
 * Les informations météo locales
 * L'heure et la date locale (synchronisée sur Internet)
 * L'heure du lever et du coucher de soleil
 
 
-Le rafraichissement des données photovoltaiques se fait toutes les 15 secondes. La météo est quand à elle actualisée toutes les 15 minutes.
+Le rafraichissement des données photovoltaïques se fait toutes les 15 secondes. La météo est quant à elle actualisée toutes les 15 minutes.
 
-Le bouton du T-Diplay situé en bas (si vous avez branché le module par la gauche), permet de sélectionner en séquence l'écran affiché : 
+Le bouton du bas (si vous avez branché le module par la gauche), permet de sélectionner en séquence l'écran affiché : 
   - Affichage principal, 
-  - Prévision de production (courbes heure/heure J et J+1), 
+  - Prévision de production (courbe heure par heure, J et J+1), 
   - Tempo, 
   - Compteurs de cumuls, 
-  - Réglage luninosité.
-  - Météo (en developpement)
+  - Réglage luminosité.
+  - Météo (en développement)
 
 Un double clic sur ce bouton revient à l'écran principal. 
 
-Le bouton du T-Diplay situé en haut permet d'allumer ou éteindre l'écran. Celui-ci s'éteindra également au bout de 5 mn si vous avez choisi le mode veille lors de la configuration. 
+Le bouton du haut permet d'allumer ou éteindre l'écran. Celui-ci s'éteindra également au bout de 5 mn si vous avez choisi le mode veille lors de la configuration. 
 
 Sur l'écran de réglage de luminosité écran, un clic simple sur ce bouton augmente la luminosité, alors qu'un double clic la diminue.
 
-En cas de problème, le bouton reset situé sur le dessus du boitier permet de relancer le programme. Un double reset en moins de 15s permet d'activer le mode de configuration (Wifi AP).
+En cas de problème, le bouton reset situé sur le dessus du boitier permet de relancer le programme. Un double reset en moins de 15 s permet d'activer le mode de configuration (Wifi AP).
 
 
 ## Intégration avec InfluDB
 
-**InfluxDB** est un système de gestion de base de données orientée séries temporelles, employées notamment pour stocker et analyser des données horodatées de capteurs. **InfluxDB** est courament utilisé pour le monitoring de processus, la surveillance d'infracstructure, ou de performance.
+**InfluxDB** est un système de gestion de base de données orientée séries temporelles, employées notamment pour stocker et analyser des données horodatées de capteurs. **InfluxDB** est couramment utilisé pour le monitoring de processus, la surveillance d'infrastructure, ou de performance.
 
-**CompanionIO** peut transmettre périodiquement les mesures du routeur vers une instance **InfluxDB** pour mémorisation, et permettre une analyse graphique en temps réel ou à postérieri.
+**CompanionIO** peut transmettre périodiquement les mesures du routeur vers une instance **InfluxDB** pour mémorisation, et permettre une analyse graphique en temps réel ou à postériori.
 
-<img src="img/influxdb.png" width="100%"> 
+<p align="center"> <img src="img/influxdb.png" width="100%"> </p>
 
-La transmission des messures routeur vers **InfluxDB** est activable dans l'écran de configuration du WIFI et des autes paramètres.
+La transmission des mesures routeur vers **InfluxDB** est activable dans l'écran de configuration du WIFI et des autres paramètres.
 
 ## Intégration avec Home Assistant
 
-**CompanionIO** peut servir d'interface entre **MSunPV** et **Home Assistant**, en transmettant périodiquement les données du routeur sous forme d'evenement **MQTT**.
+**CompanionIO** peut servir d'interface entre **MSunPV** et **Home Assistant**, en transmettant périodiquement les données du routeur sous forme d'événement **MQTT**.
 
 Cette solution bien que toujours opérationnelle, et maintenant surpassée par l'intégration native [MSunPVIntegration](https://github.com/pvergezac/MSunPVIntegration) disponible dans **Home Assistant** avec **HACS**.
 
-<img src="img/config_3a.jpg" width="40%"> 
+<p align="center"> <img src="img/config_3a.jpg" width="40%"> </p>
 
-La transmission des messures du routeur via **MQTT** est activable dans l'écran de configuration du WIFI et des autes paramètres.
+La transmission des mesures du routeur via **MQTT** est activable dans l'écran de configuration du WIFI et des autres paramètres.
 
 ---
 ## Utilisation avec l'IDE PlateformIO
@@ -185,29 +201,35 @@ La transmission des messures du routeur via **MQTT** est activable dans l'écran
   * Open **VSCode** Extension Manager
   * Search for official **PlatformIO IDE** extension
   * Install **PlatformIO IDE**
-* Cloner le dépots du projet, dans le répertoire de travail
-  ou télécharger le zip des sources du projet, et le déziper dans le répertoire de travail.
+* Cloner le dépôt du projet, dans le répertoire de travail
+  ou télécharger le zip des sources du projet, et le dézipper dans le répertoire de travail.
 <p>
     Lors du premier upload du logiciel sur le module **T-Display-S3**, il et nécessaire d'uploader les fichiers de donnée du repertoire **'data'**. Pour cela utiliser le commande **Upload Filesystem Image** de **PlateformIO**. Par la suite la commande **Upload** suffira à télécharger le code, et n'effacera pas la sauvegarde des paramatres de configuration (contrairement à la première).
 
 ---
-## MSunPV
-<img src="img/SAM_0251_640.JPG" width="50%"> 
-<p>
+---
 
-Le routeur **MSunPV** de **Ard-Tek** est un routeur solaire permettant d'utiliser l'éxèdent de production des panneaux solaires pour recharger le ballon d'eau chaude, au lieu de l'injecter sur le réseau électrique.
+## Routeur MSunPV
+<p align="center"> <img src="img/SAM_0251_640.JPG" width="50%"> </p>
 
-Il fonctionne à la maniere d'un variateur de puissance (gradateur), en adaptant la puissance du ballon d'eau chaude en fonction du surplus de production solaire vis à vis de la consomation du domicile. Il utilise pour cela un ou plusieur capteurs de courant placés sur les cables du tableau électrique. 
+Le routeur **MSunPV** de **Ard-Tek** est un routeur solaire permettant d'utiliser l'excédent de production des panneaux solaires pour recharger le ballon d'eau chaude, au lieu de l'injecter sur le réseau électrique.
+
+> **Il fonctionne à la manière d'un variateur de puissance (gradateur), en adaptant la puissance du ballon en fonction du surplus de production solaire (production - consommation du domicile).**
+
+- Il utilise pour cela un ou plusieurs capteurs de courant placés sur les câbles du tableau électrique.
+- Il peut également mesurer la température du ballon, si une sonde y est ajoutée.
+- Il remplace le commutateur jour/nuit pour bénéficier de l'ensoleillement et compléter la chauffe en horaire de nuit si nécessaire.
 
 Tous les détails sont sur le site de [Ard-Tek](https://ard-tek.com).
 
+---
 ---
 ## Crédits
 
 L'afficheur est basé sur les travaux du **[Companion MSunPV de @jjhontebeyrie](https://github.com/JJHontebeyrie/Companion)**, mais également sur ceux du **[Companion pour MaxPV de @djeje12](https://github.com/djeje12/Companion_for_MaxPV)**.
 
-Le code en a été très largement ré-écrit et adpaté.
+Le code en a été très largement réécrit et adapté.
 
-Il y a de nombreux échanges sur le développement et l'utilisation de ces afficheurs sur le [Forum Photovoltaique](https://forum-photovoltaique.fr/viewtopic.php?t=62730), mais également sur le [forum de Ard-Tek](https://ard-tek.com/index.php/forum/vos-installations-mspv/686-faire-un-afficheur-deporte).
+Il y a de nombreux échanges sur le développement et l'utilisation de ces afficheurs sur le [Forum Photovoltaïque](https://forum-photovoltaique.fr/viewtopic.php?t=62730) et le [Forum Ard-Tek](https://ard-tek.com/index.php/forum/vos-installations-mspv/686-faire-un-afficheur-deporte).
 
 
