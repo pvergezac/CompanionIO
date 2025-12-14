@@ -16,7 +16,7 @@ Afficheur déporté pour le routeur solaire **MSunPV** de **Ard-Tek**.
 ![InfluxDB](https://img.shields.io/badge/InfluxDB-22ADF6?logo=InfluxDB&logoColor=white)
 
 
-<img src="img/ecr_princ.jpg" width="50%"><img src="img/ecr_meteo_solair.jpg" width="50%">
+<img src="img/ecr_princ_2.jpg" width="50%"><img src="img/ecr_meteo_solair.jpg" width="50%">
 <img src="img/ecr_tempo.jpg" width="50%"><img src="img/ecr_lumi.jpg" width="50%">
 
 **CompanionIO** est un écran déporté qui permet de suivre : 
